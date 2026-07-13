@@ -1,0 +1,17 @@
+node_modules/
+dist/
+outputs/
+.env
+.env.*
+!.env.example
+*.log
+*.zip
+sales-os-crm-*.csv
+sales-os-report-*.txt
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.codex/
+.agents/
+
