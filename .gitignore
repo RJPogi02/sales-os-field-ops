@@ -1,17 +1,19 @@
 node_modules/
 dist/
+coverage/
 outputs/
+
 .env
 .env.*
 !.env.example
+
 *.log
+*.tmp
 *.zip
-sales-os-crm-*.csv
-sales-os-report-*.txt
+*.pyc
+__pycache__/
+
 .DS_Store
 Thumbs.db
-.idea/
-.vscode/
-.codex/
-.agents/
+.vite/
 

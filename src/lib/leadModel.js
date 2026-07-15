@@ -24,8 +24,21 @@ export const STATUS_OPTIONS = [
   'Quotation Requested', 'Pricing Queue', 'Won', 'Lost', 'Not Interested', 'Invalid Contact',
 ]
 
+export const CRM_IMPORT_FIELDS = [
+  { key: 'company', label: 'Company', required: true },
+  { key: 'location', label: 'Location / address' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'email', label: 'Email' },
+  { key: 'sourceWebsite', label: 'Website' },
+  { key: 'region', label: 'Region' },
+  { key: 'status', label: 'Status' },
+  { key: 'notes', label: 'Notes' },
+]
+
+export const CRM_IMPORT_REQUIRED_FIELDS = CRM_IMPORT_FIELDS.filter((field) => field.required).map((field) => field.key)
+
 export const PRICING_STAGES = [
-  'Needs pricing', 'Submitted to Pricing Desk', 'Price received',
+  'Needs pricing', 'Submitted to pricing approver', 'Price received',
   'Quotation sent to client', 'Follow-up scheduled', 'Won', 'Lost',
 ]
 
@@ -58,7 +71,7 @@ export const ACHIEVEMENTS = [
   { id: 'first-warm', label: 'First Warm Lead', icon: 'WL' },
   { id: 'first-quote', label: 'First Quote-Ready Lead', icon: '03' },
   { id: 'five-quotes', label: '5 Quote-Ready Leads', icon: '05' },
-  { id: 'first-handoff', label: 'First Pricing Desk Handoff', icon: 'SL' },
+  { id: 'first-handoff', label: 'First Pricing Handoff', icon: 'PH' },
   { id: 'first-sample', label: 'First Sample Request', icon: 'SR' },
   { id: 'first-followup', label: 'First Follow-Up Scheduled', icon: 'FU' },
   { id: 'first-win', label: 'First Closed Deal', icon: 'W' },
@@ -66,15 +79,39 @@ export const ACHIEVEMENTS = [
 
 export const todayKey = () => new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 
-export const createDailyState = () => ({
+const dailySessionId = () => `mission-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+
+export const createDailyState = (callGoal = 20) => ({
   date: todayKey(),
+  sessionId: dailySessionId(),
+  callGoal: Math.min(50, Math.max(1, Number.parseInt(callGoal, 10) || 20)),
   rosterLocked: false,
+  rosterLeadIds: [],
   activeCall: null,
   calls: [],
   events: [],
   completedLeadIds: [],
   xpEarned: 0,
+  taskXpEarned: 0,
 })
+
+export function dailyGoalForProfile(profile = {}) {
+  const value = Number.parseInt(profile.dailyCallGoal, 10)
+  return Number.isFinite(value) ? Math.min(50, Math.max(1, value)) : 20
+}
+
+export function missionGoalsForCallTarget(value = 20) {
+  const calls = Math.min(50, Math.max(1, Number.parseInt(value, 10) || 20))
+  return {
+    calls,
+    selected: calls,
+    answered: Math.max(1, Math.ceil(calls * .25)),
+    profiles: Math.max(1, Math.ceil(calls * .25)),
+    warm: Math.max(1, Math.ceil(calls * .15)),
+    quotes: Math.max(1, Math.ceil(calls * .10)),
+    pricing: Math.max(1, Math.ceil(calls * .10)),
+  }
+}
 
 export const ANSWERED_FOLLOW_UP_RESULTS = [
   'Spoke to Staff', 'Procurement Contact Found', 'Asked for Email',
@@ -107,6 +144,7 @@ export function classForXp(xp = 0) {
 }
 
 export function normalizeLead(lead) {
+  const now = new Date().toISOString()
   return {
     ...lead,
     company: lead.company || 'New lead',
@@ -139,9 +177,9 @@ export function normalizeLead(lead) {
     quotationStatus: lead.quotationStatus || (lead.quoteReady ? 'Pricing queue' : 'Not started'),
     managementPricingNeeded: Boolean(lead.managementPricingNeeded || lead.inPricingQueue),
     pricingQueueAt: lead.pricingQueueAt || '',
-    pricingStage: lead.pricingStage || (lead.inPricingQueue ? 'Needs pricing' : 'Needs pricing'),
+    pricingStage: lead.pricingStage === 'Submitted to Sir Luke' ? 'Submitted to pricing approver' : (lead.pricingStage || 'Needs pricing'),
     quotedPrice: lead.quotedPrice || '',
-    submittedToSirLukeAt: lead.submittedToSirLukeAt || '',
+    submittedToApproverAt: lead.submittedToApproverAt || lead.submittedToSirLukeAt || '',
     quotationSentAt: lead.quotationSentAt || '',
     pricingFollowUpDate: lead.pricingFollowUpDate || '',
     outcomeNotes: lead.outcomeNotes || '',
@@ -179,7 +217,15 @@ export function normalizeLead(lead) {
     commissionRate: lead.commissionRate || '',
     dealProbability: Number.isFinite(Number(lead.dealProbability)) ? Number(lead.dealProbability) : 25,
     quoteDueDate: lead.quoteDueDate || '',
-    sirLukeNotes: lead.sirLukeNotes || '',
+    approverNotes: lead.approverNotes || lead.sirLukeNotes || '',
+    visibility: lead.visibility === 'private' ? 'private' : 'team',
+    ownerId: lead.ownerId || '',
+    ownerName: lead.ownerName || '',
+    claimOwnerId: lead.claimOwnerId || '',
+    claimOwnerName: lead.claimOwnerName || '',
+    claimExpiresAt: lead.claimExpiresAt || '',
+    createdAt: lead.createdAt || now,
+    updatedAt: lead.updatedAt || lead.createdAt || now,
   }
 }
 
@@ -187,6 +233,93 @@ export function phoneKey(value = '') {
   const digits = String(value).replace(/\D/g, '')
   if (digits.length === 12 && digits.startsWith('63')) return `0${digits.slice(2)}`
   return digits
+}
+
+export function importIdentityKeys(lead = {}) {
+  const phone = phoneKey(lead.phone)
+  const email = String(lead.email || '').trim().toLowerCase()
+  const company = cleanImportIdentity(lead.company)
+  const location = cleanImportIdentity(lead.location || lead.address || lead.deliveryLocation)
+  const website = importWebsiteDomain(lead.sourceWebsite || lead.website || lead.sourceUrl)
+  return [
+    lead.sourcePlaceId ? `place|${lead.sourcePlaceId}` : '',
+    phone ? `phone|${phone}` : '',
+    email ? `email|${email}` : '',
+    website && location ? `website-branch|${website}|${location}` : '',
+    company && location ? `company-branch|${company}|${location}` : '',
+  ].filter(Boolean)
+}
+
+function cleanImportIdentity(value = '') {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function importWebsiteDomain(value = '') {
+  const raw = String(value || '').trim().toLowerCase()
+  if (!raw) return ''
+  try { return new URL(raw.includes('://') ? raw : `https://${raw}`).hostname.replace(/^www\./, '') }
+  catch { return raw.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] }
+}
+
+function sameImportLocation(left = '', right = '') {
+  const a = cleanImportIdentity(left)
+  const b = cleanImportIdentity(right)
+  if (!a || !b) return false
+  if (a === b) return true
+  const shortest = Math.min(a.length, b.length)
+  return shortest >= 8 && (a.includes(b) || b.includes(a))
+}
+
+export function sameImportIdentity(left = {}, right = {}) {
+  if (left.sourcePlaceId && right.sourcePlaceId && left.sourcePlaceId === right.sourcePlaceId) return true
+  const leftLocation = left.location || left.address || left.deliveryLocation || ''
+  const rightLocation = right.location || right.address || right.deliveryLocation || ''
+  const bothLocationsKnown = Boolean(cleanImportIdentity(leftLocation) && cleanImportIdentity(rightLocation))
+  const sameLocation = sameImportLocation(leftLocation, rightLocation)
+  if (bothLocationsKnown && !sameLocation) return false
+
+  const leftPhone = phoneKey(left.phone)
+  const rightPhone = phoneKey(right.phone)
+  if (leftPhone && rightPhone && leftPhone === rightPhone) return true
+
+  const leftEmail = String(left.email || '').trim().toLowerCase()
+  const rightEmail = String(right.email || '').trim().toLowerCase()
+  if (leftEmail && rightEmail && leftEmail === rightEmail) return true
+
+  const leftWebsite = importWebsiteDomain(left.sourceWebsite || left.website || left.sourceUrl)
+  const rightWebsite = importWebsiteDomain(right.sourceWebsite || right.website || right.sourceUrl)
+  if (leftWebsite && rightWebsite && leftWebsite === rightWebsite) return true
+
+  const leftCompany = cleanImportIdentity(left.company)
+  const rightCompany = cleanImportIdentity(right.company)
+  return Boolean(leftCompany && rightCompany && leftCompany === rightCompany && sameLocation)
+}
+
+export function importedLeadDraft(values = {}, options = {}) {
+  const rowNumber = Math.max(1, Number(options.rowNumber) || 1)
+  const visibility = options.visibility === 'team' ? 'team' : 'private'
+  const sourceName = String(options.sourceName || '').trim()
+  const missingRequired = CRM_IMPORT_REQUIRED_FIELDS.filter((field) => !String(values[field] || '').trim())
+  const company = String(values.company || '').trim() || `Unidentified imported lead - row ${rowNumber}`
+  const needsResearch = missingRequired.length > 0
+  const mappedFields = Array.isArray(options.mappedFields) ? [...new Set(options.mappedFields)] : Object.keys(values)
+  const providedFields = Array.isArray(options.providedFields)
+    ? [...new Set(options.providedFields)]
+    : Object.keys(values).filter((field) => values[field] !== '' && values[field] !== null && values[field] !== undefined)
+  return {
+    ...values,
+    company,
+    region: values.region || 'NCR',
+    status: values.status || 'New Lead',
+    visibility,
+    leadSource: options.leadSource || 'CRM import',
+    sourceName,
+    researchStatus: needsResearch ? 'Needs Research' : (values.researchStatus || ''),
+    verificationStatus: needsResearch || (!values.phone && !values.email) ? 'Needs Research' : (values.verificationStatus || 'Unverified'),
+    importMissingFields: missingRequired,
+    importMappedFields: mappedFields,
+    importProvidedFields: providedFields,
+  }
 }
 
 export function phoneCountsForLeads(leads = []) {
@@ -212,7 +345,10 @@ export function phoneQuality(phone = '', phoneCounts = null) {
 }
 
 export function phoneQualityForLead(lead, phoneCounts = null) {
-  if (lead?.researchStatus === 'Needs Research' || lead?.status === 'Invalid Contact') {
+  const researchState = String(lead?.researchStatus || '').trim().toLowerCase()
+  const verificationState = String(lead?.verificationStatus || '').trim().toLowerCase()
+  const leadState = String(lead?.status || '').trim().toLowerCase()
+  if (['research', 'needs research'].includes(researchState) || verificationState === 'needs research' || leadState === 'invalid contact') {
     return { label: 'Invalid', tone: 'invalid', detail: 'Marked for contact research', score: -100 }
   }
   return phoneQuality(lead?.phone, phoneCounts)
@@ -275,6 +411,16 @@ export function hasQuotationBasics(lead) {
   return Boolean(lead.materialNeeded?.trim() && lead.deliveryLocation?.trim() && lead.deliveryLocationConfirmed)
 }
 
+export function callResultXp({ existingCall = false, firstAnswerForLead = false, result = '', lead = {}, patch = {} } = {}) {
+  const profileTransition = !lead.profileSent && (result === 'Profile Sent' || Boolean(patch.profileSent))
+  const quoteTransition = !lead.quoteReady && result === 'Quotation Requested' && Boolean(patch.quoteReady)
+  return (existingCall ? 0 : 10)
+    + (firstAnswerForLead ? 40 : 0)
+    + (profileTransition ? 30 : 0)
+    + (patch.warmLead && !lead.warmLead ? 20 : 0)
+    + (quoteTransition ? 100 : 0)
+}
+
 export function canEnterPricingQueue(lead) {
   return pricingReadiness(lead).every((item) => item.ready)
 }
@@ -290,14 +436,20 @@ export function pricingReadiness(lead) {
   ]
 }
 
-export function buildProfileEmail(lead, operatorName = 'Demo Operator') {
+export function buildProfileEmail(lead, operatorName = '', companyProfile = {}) {
   const followUp = new Date()
   followUp.setDate(followUp.getDate() + 3)
-  const subject = `Northstar Materials supply support for ${lead.company}`
+  const companyName = companyProfile.companyName || companyProfile.shortName || 'our company'
+  const shortName = companyProfile.shortName || companyProfile.companyName || 'Company profile'
+  const senderName = operatorName || companyProfile.operatorName || 'Sales representative'
+  const materials = Array.isArray(companyProfile.materials) && companyProfile.materials.length
+    ? companyProfile.materials.join(', ')
+    : 'the materials and services listed in our company profile'
+  const subject = `${shortName} supply support for ${lead.company}`
   const body = [
     `Good day${lead.contactPerson ? ` ${lead.contactPerson}` : ''},`,
     '',
-    `This is ${operatorName} from Northstar Materials. We support batching plants and projects with aggregates, sand, gravel, S1, 3/4, 3/8, G1, vibro sand, filling materials, hauling, and equipment leasing.`,
+    `This is ${senderName} from ${companyName}. We support customers and projects with ${materials}.`,
     '',
     'I am sharing our company profile for your reference. If you are open to an additional supplier, may we confirm the materials, volume, and delivery/project location you currently need?',
     '',
@@ -310,12 +462,12 @@ function todayKeyFor(date) {
   return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
 }
 
-export function buildHandoffMessage(lead, distanceNotes = '', sourceContext = '') {
+export function buildHandoffMessage(lead, distanceNotes = '', sourceContext = '', approverLabel = 'Pricing approver') {
   const sampleDocs = lead.sampleDocStatus === 'Not required'
     ? 'Not required'
     : [lead.materialSampleNeeded || (lead.sampleRequired ? 'Sample required' : ''), lead.documentsRequired].filter(Boolean).join(' | ') || 'Needs confirmation'
   return [
-    'Pricing Desk, for final quotation/pricing:',
+    `${approverLabel}, for final quotation/pricing:`,
     '',
     `Company: ${lead.company}`,
     `Lead location: ${lead.location || 'Not available'}`,
@@ -334,14 +486,14 @@ export function buildHandoffMessage(lead, distanceNotes = '', sourceContext = ''
     `Possible source context: ${sourceContext || 'Not matched yet'}`,
     `Notes: ${lead.notes || 'None'}`,
     '',
-    'Reminder: final quotation/pricing requires Pricing Desk.',
+    `Reminder: final quotation/pricing requires ${approverLabel}.`,
   ].join('\n')
 }
 
-export function buildBatchHandoffMessage(leads = []) {
+export function buildBatchHandoffMessage(leads = [], approverLabel = 'Pricing approver') {
   const active = leads.filter(Boolean)
   return [
-    `Pricing Desk, reference/final pricing request for ${active.length} lead${active.length === 1 ? '' : 's'}:`,
+    `${approverLabel}, reference/final pricing request for ${active.length} lead${active.length === 1 ? '' : 's'}:`,
     '',
     ...active.flatMap((lead, index) => [
       `${index + 1}. ${lead.company}`,
@@ -355,7 +507,7 @@ export function buildBatchHandoffMessage(leads = []) {
       '',
     ]),
     'Please advise price basis/unit, delivered or ex-plant basis, freight assumptions, VAT, minimum order, availability, and validity.',
-    'Reminder: final quotations and availability require Pricing Desk confirmation.',
+    `Reminder: final quotations and availability require ${approverLabel} confirmation.`,
   ].join('\n')
 }
 
@@ -476,7 +628,7 @@ export function distanceIntelligence(lead, userPosition) {
   return { leadPoint, deliveryPoint, userToLead, leadToDelivery, userToDelivery, notes }
 }
 
-export function sourceContextForLead(lead, suppliers = []) {
+export function sourceContextForLead(lead, suppliers = [], approverLabel = 'the pricing approver') {
   const material = (lead.materialNeeded || '').toLowerCase()
   const location = `${lead.deliveryLocation} ${lead.location}`.toLowerCase()
   const scored = suppliers.map((supplier) => {
@@ -486,14 +638,37 @@ export function sourceContextForLead(lead, suppliers = []) {
     return { supplier, score }
   }).sort((a, b) => b.score - a.score)
   const match = scored[0]?.supplier
-  if (!match || scored[0].score === 0) return 'No close source reference matched yet. Verify source availability and final pricing with Pricing Desk.'
-  return `${match.supplierName} for ${match.materialType.join(', ')}. ${match.status === 'Verified' ? 'Reference was recently verified.' : 'Data may be outdated and needs recheck.'} Verify availability and final pricing with Pricing Desk.`
+  if (!match || scored[0].score === 0) return `No close source reference matched yet. Verify source availability and final pricing with ${approverLabel}.`
+  return `${match.supplierName} for ${match.materialType.join(', ')}. ${match.status === 'Verified' ? 'Reference was recently verified.' : 'Data may be outdated and needs recheck.'} Verify availability and final pricing with ${approverLabel}.`
 }
 
-export function autoPickScore(lead, territory, completedIds = new Set(), userPosition = null, phoneCounts = null) {
+export function leadQueueEligibility(lead, context = {}) {
+  const {
+    territory = 'ALL', completedIds = new Set(), phoneCounts = null, operatorId = '',
+    today = todayKey(), now = new Date(), allowRetryDue = true,
+  } = context
   const quality = phoneQualityForLead(lead, phoneCounts)
-  if (territory !== 'ALL' && lead.region !== territory) return -1000
-  if (quality.score < 0 || completedIds.has(lead.id) || lead.status === 'Invalid Contact' || lead.lastResult === 'Wrong Number') return -1000
+  if (territory !== 'ALL' && lead.region !== territory) return { eligible: false, reason: 'Outside selected territory', quality }
+  if (quality.score < 0 || lead.status === 'Invalid Contact' || lead.lastResult === 'Wrong Number') return { eligible: false, reason: 'Contact needs repair', quality }
+  if (completedIds.has(lead.id) || lead.lastContacted === today) return { eligible: false, reason: 'Already handled today', quality }
+  if (['Contacted', 'Follow-up Needed', 'Profile Sent', 'Quotation Requested', 'Not Interested', 'Won', 'Lost'].includes(lead.status)) return { eligible: false, reason: `${lead.status} belongs in Conversion, not cold calls`, quality }
+  if (lead.inPricingQueue || lead.status === 'Pricing Queue') return { eligible: false, reason: 'Already in pricing workflow', quality }
+  if (lead.nextFollowUp || lead.pricingFollowUpDate) return { eligible: false, reason: 'Scheduled in the follow-up workflow', quality }
+  if (lead.visibility === 'private' && lead.ownerId && operatorId && lead.ownerId !== operatorId) return { eligible: false, reason: 'Private lead owned by another operator', quality }
+  const claimUntil = lead.claimExpiresAt ? new Date(lead.claimExpiresAt).getTime() : 0
+  const nowTime = now instanceof Date ? now.getTime() : new Date(now).getTime()
+  if (lead.claimOwnerId && operatorId && lead.claimOwnerId !== operatorId && (!claimUntil || claimUntil > nowTime)) {
+    return { eligible: false, reason: `Claimed by ${lead.claimOwnerName || 'another operator'}`, quality }
+  }
+  if (lead.retryStatus === 'Retry Tomorrow') return { eligible: false, reason: 'Scheduled for another day', quality }
+  if (lead.nextRetryTime && (!allowRetryDue || new Date(lead.nextRetryTime).getTime() > nowTime)) return { eligible: false, reason: 'Retry window is not due', quality }
+  return { eligible: true, reason: 'Callable now', quality }
+}
+
+export function autoPickScore(lead, territory, completedIds = new Set(), userPosition = null, phoneCounts = null, context = {}) {
+  const eligibility = leadQueueEligibility(lead, { ...context, territory, completedIds, phoneCounts })
+  if (!eligibility.eligible) return -1000
+  const quality = eligibility.quality
   let score = 0
   score += 50
   if (String(lead.priority).toLowerCase() === 'high') score += 25

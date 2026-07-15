@@ -2,8 +2,9 @@ import { AlertTriangle, Database, MapPinned } from 'lucide-react'
 import { seedSuppliers } from '../data/suppliers.js'
 import { sourceContextForLead } from '../lib/leadModel.js'
 
-export function SupplierContext({ lead, compact = false }) {
-  const context = sourceContextForLead(lead, seedSuppliers)
+export function SupplierContext({ lead, companyProfile = {}, compact = false }) {
+  const approverLabel = companyProfile.approverLabel || 'the pricing approver'
+  const context = sourceContextForLead(lead, seedSuppliers, approverLabel)
   const material = (lead.materialNeeded || '').toLowerCase()
   const matches = seedSuppliers
     .map((supplier) => ({
@@ -23,7 +24,7 @@ export function SupplierContext({ lead, compact = false }) {
           <div><strong>{supplier.supplierName}</strong><span>{supplier.materialType.join(' · ')}</span><small>{supplier.location} · {supplier.status}</small></div>
         </article>)}
       </div>
-      <footer><AlertTriangle size={13} />Reference only. Final quote requires Pricing Desk.</footer>
+      <footer><AlertTriangle size={13} />Reference only. Final quote requires {approverLabel}.</footer>
     </section>
   )
 }

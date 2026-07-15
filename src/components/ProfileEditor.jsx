@@ -1,5 +1,6 @@
 import { Camera, X } from 'lucide-react'
 import { useRef } from 'react'
+import { themes } from '../lib/themes.js'
 
 async function resizeAvatar(file) {
   const source = await createImageBitmap(file)
@@ -25,7 +26,7 @@ export function ProfileEditor({ profile, onChange, onClose }) {
         <header><div><span className="section-label">Operator profile</span><h2 id="profile-title">Make Sales OS yours.</h2></div><button onClick={onClose} aria-label="Close profile editor"><X size={18} /></button></header>
         <div className="profile-form">
           <button className="profile-photo-control" onClick={() => fileRef.current?.click()}>
-            {profile.photo ? <img src={profile.photo} alt="Operator" /> : <span>{profile.initials || 'DO'}</span>}
+            {profile.photo ? <img src={profile.photo} alt="Operator" /> : <span>{profile.initials || 'OP'}</span>}
             <i><Camera size={15} />Change photo</i>
           </button>
           <input ref={fileRef} hidden type="file" accept="image/*" onChange={async (event) => {
@@ -40,7 +41,7 @@ export function ProfileEditor({ profile, onChange, onClose }) {
             <label><span>Email</span><input type="email" value={profile.email} onChange={(event) => setField('email', event.target.value)} /></label>
             <label><span>Phone</span><input value={profile.phone} onChange={(event) => setField('phone', event.target.value)} /></label>
             <label><span>Territory focus</span><select value={profile.territoryFocus || 'ALL'} onChange={(event) => setField('territoryFocus', event.target.value)}><option value="ALL">All territories</option><option value="NCR">NCR</option><option value="NORTH">North Luzon</option><option value="SOUTH">South Luzon</option></select></label>
-            <label><span>Preferred theme</span><select value={profile.preferredTheme || 'glass'} onChange={(event) => setField('preferredTheme', event.target.value)}><option value="field">Light</option><option value="midnight">Dark</option><option value="glass">Liquid Glass</option><option value="frosted">Frosted Glass</option></select></label>
+            <label><span>Preferred theme</span><select value={profile.preferredTheme || 'glass'} onChange={(event) => setField('preferredTheme', event.target.value)}>{themes.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}</select></label>
             <label><span>Current sales goal</span><input value={profile.currentSalesGoal || ''} onChange={(event) => setField('currentSalesGoal', event.target.value)} placeholder="e.g. 5 quote-ready leads daily" /></label>
             <label><span>Rank title</span><input value={profile.rankTitle || ''} onChange={(event) => setField('rankTitle', event.target.value)} placeholder="Leave blank to use earned rank" /></label>
             <label><span>Motivational quote / battle cry</span><input value={profile.battleCry || ''} onChange={(event) => setField('battleCry', event.target.value)} placeholder="One call at a time." /></label>

@@ -1,7 +1,7 @@
 import { AlertTriangle, CalendarDays, CalendarClock, Check, ExternalLink, Mail, Map, MessageCircle, PhoneCall, RefreshCcw, Search, UserCheck } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { leadResearchLinks } from '../lib/leadDiscovery.js'
-import { followUpLeads, phoneCountsForLeads, phoneQualityForLead, profileOpportunityLeads, reactivateLeadPatch } from '../lib/leadModel.js'
+import { followUpLeads, phoneCountsForLeads, phoneKey, phoneQualityForLead, profileOpportunityLeads, reactivateLeadPatch } from '../lib/leadModel.js'
 import { FollowUpCalendar } from './FollowUpCalendar.jsx'
 
 const tabs = [
@@ -36,7 +36,12 @@ export function ConversionDesk({ leads, onUpdateLead, onOpenLead, onCallLead }) 
 function ConversionCard({ tab, lead, quality, onUpdateLead, onOpenLead, onCallLead }) {
   const followUpDate = lead.nextFollowUp || lead.pricingFollowUpDate
   const researchLinks = leadResearchLinks(lead)
-  const verifyLead = () => onUpdateLead(lead.id, { ...reactivateLeadPatch(), phone: lead.researchPhone || lead.phone, email: lead.researchEmail || lead.email, verificationStatus: 'Verified', verifiedAt: new Date().toISOString() }, 'Lead contact verified and returned to call queue', lead.researchUrl || lead.sourceUrl)
+  const repairedPhone = phoneKey(lead.researchPhone)
+  const repairReady = Boolean(repairedPhone && repairedPhone !== phoneKey(lead.phone) && lead.verificationStatus === 'Verified')
+  const verifyLead = () => {
+    if (!repairReady) return window.alert('Enter a different valid phone number and set Verification to Verified before returning this lead to the call queue.')
+    return onUpdateLead(lead.id, { ...reactivateLeadPatch(), phone: lead.researchPhone, email: lead.researchEmail || lead.email, verificationStatus: 'Verified', verifiedAt: new Date().toISOString() }, 'Lead contact verified and returned to call queue', lead.researchUrl || lead.sourceUrl)
+  }
   return <article className="conversion-card">
     <div className="conversion-card-head"><div><span>{lead.region} · {lead.status}</span><h3>{lead.company}</h3><p>{lead.phone || 'No phone'} · {lead.email || 'No email'}</p></div><i className={`phone-quality ${quality.tone}`}>{quality.label}<small>{quality.detail}</small></i></div>
     {tab === 'retry' ? <div className="conversion-card-fields"><label><span>Retry status</span><select value={lead.retryStatus} onChange={(event) => onUpdateLead(lead.id, { retryStatus: event.target.value }, 'Retry status updated', event.target.value)}><option>Retry Later</option><option>Retry Tomorrow</option><option>Ready to Retry</option><option value="">Clear retry</option></select></label><label><span>Next retry</span><input type="datetime-local" value={lead.nextRetryTime || ''} onChange={(event) => onUpdateLead(lead.id, { nextRetryTime: event.target.value }, 'Retry time scheduled', event.target.value)} /></label><div className="conversion-card-actions"><button onClick={() => onCallLead(lead)}><PhoneCall size={14} />Call now</button><button onClick={() => onOpenLead(lead.id)}>Open lead</button></div></div> : null}

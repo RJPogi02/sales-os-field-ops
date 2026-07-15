@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 
-export function usePersistentState(key, initialValue) {
+export function usePersistentState(key, initialValue, revive = (value) => value) {
   const [value, setValue] = useState(() => {
     const fallback = () => typeof initialValue === 'function' ? initialValue() : initialValue
     try {
       const stored = localStorage.getItem(key)
-      return stored ? JSON.parse(stored) : fallback()
+      return revive(stored ? JSON.parse(stored) : fallback())
     } catch {
-      return fallback()
+      return revive(fallback())
     }
   })
 

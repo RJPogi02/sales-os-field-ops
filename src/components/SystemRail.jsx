@@ -1,16 +1,14 @@
-import { Check, Eye, Focus, GraduationCap, Moon, Palette, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Settings, Snowflake, Sparkles, Sun } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { Check, Eye, Focus, GraduationCap, Palette, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Settings, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { APP_VERSION_LABEL } from '../config/version.js'
+import { themes } from '../lib/themes.js'
+
+export { themes } from '../lib/themes.js'
 
 const territories = ['ALL', 'NCR', 'NORTH', 'SOUTH']
-export const themes = [
-  { id: 'field', label: 'Light', description: 'Clear editorial field cockpit', Icon: Sun },
-  { id: 'midnight', label: 'Dark', description: 'Dark focused operations', Icon: Moon },
-  { id: 'glass', label: 'Liquid Glass', description: 'Glossy, reflective spatial glass', Icon: Sparkles },
-  { id: 'frosted', label: 'Frosted Glass', description: 'Soft OS-style diffused glass', Icon: Snowflake },
-]
 
 function companyInitials(profile) {
-  const value = profile.company || profile.name || 'Northstar Materials'
+  const value = profile.company || profile.name || 'Sales OS'
   return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'KJ'
 }
 
@@ -31,11 +29,32 @@ async function resizeLogo(file) {
 export function SystemRail({
   theme, onThemeChange, territory, onTerritoryChange, profile, onLogoChange, onOpenSettings,
   leftCollapsed, onToggleLeft, rightCollapsed, onToggleRight, focusMode, onToggleFocus,
-  onOpenOnboarding, practiceMode, demoMode,
+  onOpenOnboarding, practiceMode, demoMode, teamConnected = false,
 }) {
   const [themeOpen, setThemeOpen] = useState(false)
   const logoRef = useRef(null)
+  const themeControlRef = useRef(null)
+  const themeToggleRef = useRef(null)
   const date = new Intl.DateTimeFormat('en-PH', { weekday: 'long', month: 'long', day: '2-digit', year: 'numeric' }).format(new Date())
+
+  useEffect(() => {
+    if (!themeOpen) return undefined
+    const closeOnOutsideClick = (event) => {
+      if (!themeControlRef.current?.contains(event.target)) setThemeOpen(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key !== 'Escape') return
+      setThemeOpen(false)
+      themeToggleRef.current?.focus()
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [themeOpen])
+
   return (
     <header className="system-rail">
       <div className="brand-lockup">
@@ -47,11 +66,11 @@ export function SystemRail({
           if (file) onLogoChange(await resizeLogo(file))
           event.target.value = ''
         }} />
-        <strong>Sales OS</strong><span>// Field Ops</span><em className="version-badge">v0.071</em>
+        <strong>Sales OS</strong><span>// Field Ops</span><em className="version-badge">{APP_VERSION_LABEL}</em>
       </div>
       <div className="territory-switch"><span>Territory</span>{territories.map((item) => <button key={item} className={territory === item ? 'active' : ''} onClick={() => onTerritoryChange(item)}>{item === 'ALL' ? 'All' : item}</button>)}</div>
       <div className="system-date">{date}</div>
-      <div className="system-status"><span>Status</span><i /> <strong>Online</strong><span>· Local save on</span></div>
+      <div className={`system-status ${teamConnected ? 'team-connected' : ''}`}><span>Status</span><i /> <strong>{teamConnected ? 'Team synced' : 'Local only'}</strong><span> · Local save on</span></div>
       <div className="workspace-controls" aria-label="Workspace controls">
         <button onClick={onToggleLeft} aria-label={leftCollapsed ? 'Expand left sidebar' : 'Collapse left sidebar'} title={leftCollapsed ? 'Expand left sidebar' : 'Collapse left sidebar'}>{leftCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}</button>
         <button onClick={onToggleRight} aria-label={rightCollapsed ? 'Expand right sidebar' : 'Collapse right sidebar'} title={rightCollapsed ? 'Expand right sidebar' : 'Collapse right sidebar'}>{rightCollapsed ? <PanelRightOpen size={15} /> : <PanelRightClose size={15} />}</button>
@@ -60,9 +79,9 @@ export function SystemRail({
         {practiceMode || demoMode ? <span className="system-mode-badge"><Eye size={13} />{practiceMode ? 'Practice' : 'Demo'}</span> : null}
       </div>
       <button className="settings-toggle" onClick={onOpenSettings} aria-label="Open Sales OS settings"><Settings size={16} /></button>
-      <div className="theme-control">
-        <button className="theme-toggle" onClick={() => setThemeOpen((value) => !value)} aria-label="Choose visual theme" aria-expanded={themeOpen}><Palette size={16} /></button>
-        {themeOpen ? <div className="theme-menu panel"><header><span>Visual themes</span><button onClick={() => setThemeOpen(false)}>Done</button></header>{themes.map(({ id, label, description, Icon }) => <button key={id} className={theme === id ? 'active' : ''} onClick={() => { onThemeChange(id); setThemeOpen(false) }}><i><Icon size={15} /></i><span><strong>{label}</strong><small>{description}</small></span>{theme === id ? <Check size={14} /> : null}</button>)}</div> : null}
+      <div className="theme-control" ref={themeControlRef}>
+        <button ref={themeToggleRef} className="theme-toggle" onClick={() => setThemeOpen((value) => !value)} aria-label="Choose visual theme" aria-expanded={themeOpen} aria-controls="workspace-theme-menu"><Palette size={16} /></button>
+        {themeOpen ? <div id="workspace-theme-menu" className="theme-menu theme-palette-menu panel" role="dialog" aria-label="Visual theme palette"><header><span><Palette size={13} />Visual themes</span><button onClick={() => setThemeOpen(false)} aria-label="Close theme palette"><X size={14} /></button></header><div className="theme-swatch-grid" role="group" aria-label="Available workspace themes">{themes.map(({ id, label, description, Icon, swatch }) => <button type="button" key={id} className={`theme-swatch ${theme === id ? 'active' : ''}`} onClick={() => { onThemeChange(id); setThemeOpen(false); themeToggleRef.current?.focus() }} aria-label={`${label}. ${description}`} aria-pressed={theme === id} title={description} style={{ '--swatch-base': swatch[0], '--swatch-accent': swatch[1], '--swatch-glow': swatch[2] }}><i className="theme-swatch-preview"><span /><Icon size={14} /></i><span><strong>{label}</strong><small>{theme === id ? 'Active' : 'Apply'}</small></span>{theme === id ? <Check className="theme-swatch-check" size={13} /> : null}</button>)}</div></div> : null}
       </div>
     </header>
   )

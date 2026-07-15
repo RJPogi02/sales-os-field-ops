@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { coordinatesForLocation, distanceIntelligence } from '../lib/leadModel.js'
 import { TerritoryMap } from './TerritoryMap.jsx'
 
-export function DeliveryIntel({ lead, userLocation, onUpdateLead, compact = false }) {
+export function DeliveryIntel({ lead, userLocation, onUpdateLead, companyProfile = {}, compact = false }) {
   const [search, setSearch] = useState(lead.deliveryLocation || '')
   useEffect(() => setSearch(lead.deliveryLocation || ''), [lead.id, lead.deliveryLocation])
   const distances = useMemo(() => distanceIntelligence(lead, userLocation.position), [lead, userLocation.position])
@@ -31,7 +31,7 @@ export function DeliveryIntel({ lead, userLocation, onUpdateLead, compact = fals
         <article><span>You → delivery</span><strong>{distances.userToDelivery === null ? 'Enable location' : `${distances.userToDelivery.toFixed(distances.userToDelivery < 10 ? 1 : 0)} km`}</strong></article>
       </div>
       <button className="enable-location" onClick={userLocation.enable}>{userLocation.enabled ? <Crosshair size={15} /> : <LocateFixed size={15} />}{userLocation.enabled ? `Live location ${userLocation.status}` : 'Enable my live location'}</button>
-      <p>Local geocoder estimate. Verify the exact delivery point during the call before Pricing Desk pricing.</p>
+      <p>Local geocoder estimate. Verify the exact delivery point during the call before {companyProfile.approverLabel || 'pricing-approver'} review.</p>
     </section>
   )
 }

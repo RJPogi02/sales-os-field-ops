@@ -8,7 +8,7 @@ function tomorrowKey() {
   return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(value)
 }
 
-export function AnsweredFollowUpModal({ lead, result, operatorName, onClose, onSave }) {
+export function AnsweredFollowUpModal({ lead, result, operatorName, companyProfile = {}, onClose, onSave }) {
   const initialPerson = phoneKey(lead.contactPerson).length >= 7 ? '' : lead.contactPerson || ''
   const [form, setForm] = useState({
     person: initialPerson,
@@ -43,7 +43,7 @@ export function AnsweredFollowUpModal({ lead, result, operatorName, onClose, onS
 
   const copyProfileEmail = async () => {
     const nextLead = { ...lead, ...payload() }
-    const email = buildProfileEmail(nextLead, operatorName)
+    const email = buildProfileEmail(nextLead, operatorName, companyProfile)
     try {
       await navigator.clipboard.writeText(`To: ${nextLead.email || 'Email needed'}\nSubject: ${email.subject}\n\n${email.body}`)
       setCopied(true)
@@ -54,7 +54,7 @@ export function AnsweredFollowUpModal({ lead, result, operatorName, onClose, onS
   const sendNow = async () => {
     const nextLead = { ...lead, ...payload() }
     if (!nextLead.email) return
-    const email = buildProfileEmail(nextLead, operatorName)
+    const email = buildProfileEmail(nextLead, operatorName, companyProfile)
     try { await navigator.clipboard.writeText(`${email.subject}\n\n${email.body}`) } catch { /* mailto still works */ }
     window.open(`mailto:${encodeURIComponent(nextLead.email)}?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`, '_blank', 'noopener,noreferrer')
     onSave('send-profile', payload())

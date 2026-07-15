@@ -19,15 +19,16 @@ const LeadRow = memo(function LeadRow({ lead, active, onOpen, onToggleSelected, 
   )
 })
 
-export function LeadQueue({ leads, selectedLeadId, onOpenLead, onToggleSelected, territory, onTerritoryChange, pageSize = PAGE_SIZE }) {
+export function LeadQueue({ leads, selectedLeadId, onOpenLead, onToggleSelected, territory, onTerritoryChange, pageSize = PAGE_SIZE, eligibleLeadIds = null }) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const deferredSearch = useDeferredValue(search)
   const phoneCounts = useMemo(() => phoneCountsForLeads(leads), [leads])
   const filtered = useMemo(() => {
     const query = deferredSearch.trim().toLowerCase()
-    return leads.filter((lead) => (territory === 'ALL' || lead.region === territory) && (!query || `${lead.company} ${lead.location} ${lead.phone} ${lead.email} ${lead.contactPerson}`.toLowerCase().includes(query)))
-  }, [deferredSearch, leads, territory])
+    const eligible = eligibleLeadIds ? new Set(eligibleLeadIds) : null
+    return leads.filter((lead) => (!eligible || eligible.has(lead.id) || lead.selected) && (territory === 'ALL' || lead.region === territory) && (!query || `${lead.company} ${lead.location} ${lead.phone} ${lead.email} ${lead.contactPerson}`.toLowerCase().includes(query)))
+  }, [deferredSearch, eligibleLeadIds, leads, territory])
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   useEffect(() => setPage(1), [deferredSearch, territory])
   useEffect(() => setPage((current) => Math.min(current, pageCount)), [pageCount])
@@ -41,7 +42,7 @@ export function LeadQueue({ leads, selectedLeadId, onOpenLead, onToggleSelected,
 
   return (
     <section className="lead-queue panel">
-      <div className="queue-title"><span className="section-label">Lead queue</span><span>{filtered.length} leads · page {page}/{pageCount}</span></div>
+      <div className="queue-title"><span className="section-label">Ready today</span><span>{filtered.length} callable leads · page {page}/{pageCount}</span></div>
       <div className="queue-tools">
         <label><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search leads…" /></label>
         <div className="region-filter"><SlidersHorizontal size={14} />{['ALL', 'NCR', 'NORTH', 'SOUTH'].map((item) => <button key={item} className={territory === item ? 'active' : ''} onClick={() => onTerritoryChange(item)}>{item}</button>)}</div>

@@ -8,8 +8,9 @@ import {
   buildHandoffMessage, CHECKLIST_LABELS, distanceIntelligence,
   MATERIAL_OPTIONS, pricingReadiness, QUICK_RESULTS, sourceContextForLead,
 } from '../lib/leadModel.js'
+import { callThemeOptions } from '../lib/themes.js'
 import { ActivityTimeline } from './ActivityTimeline.jsx'
-import { ConversationCoach } from './ConversationCoach.jsx'
+import { ConversationFlow } from './ConversationFlow.jsx'
 import { DeliveryIntel } from './DeliveryIntel.jsx'
 import { ProfileSendPack } from './ProfileSendPack.jsx'
 import { SampleWorkflow } from './SampleWorkflow.jsx'
@@ -21,32 +22,25 @@ function CallField({ label, children, wide = false }) {
 }
 
 const tabs = [
-  ['coach', Sparkles, 'Coach'],
+  ['flow', Sparkles, 'Flow'],
   ['quest', Target, 'Quest'],
   ['delivery', Navigation, 'Delivery & distance'],
   ['send', Send, 'Send pack'],
 ]
 
-const callThemeOptions = [
-  ['inherit', 'Match workspace'],
-  ['field', 'Light'],
-  ['midnight', 'Dark'],
-  ['glass', 'Liquid Glass'],
-  ['frosted', 'Frosted Glass'],
-]
-
 export function CallMode({
   lead, callNumber, totalCalls, operatorName, operatorPhoto, operatorInitials, xp = 0, companionMode = 'full', reducedMotion = false, userLocation,
+  companyProfile,
   workspaceTheme = 'field', callModeTheme = 'inherit', onCallModeThemeChange,
   onClose, onUpdateLead, onQuickResult, onSendProfile, onMovePricing, onSaveNext,
   shortcutsDisabled = false,
 }) {
   const [copied, setCopied] = useState('')
-  const [tab, setTab] = useState('coach')
+  const [tab, setTab] = useState('flow')
   const readiness = pricingReadiness(lead)
   const ready = readiness.every((item) => item.ready)
   const distances = useMemo(() => distanceIntelligence(lead, userLocation.position), [lead, userLocation.position])
-  const sourceContext = useMemo(() => sourceContextForLead(lead, seedSuppliers), [lead])
+  const sourceContext = useMemo(() => sourceContextForLead(lead, seedSuppliers, companyProfile?.approverLabel || 'the pricing approver'), [companyProfile?.approverLabel, lead])
   const effectiveCallTheme = callModeTheme === 'inherit' ? workspaceTheme : callModeTheme
   const companionPrompt = ready
     ? 'Pricing packet ready. I\u2019ll keep the handoff clean.'
@@ -91,7 +85,7 @@ export function CallMode({
           <div className="call-status"><span className="call-live"><i />Live call</span><strong>Lead {String(callNumber).padStart(2, '0')} / {String(totalCalls).padStart(2, '0')}</strong><span className="call-operator-context">{operatorPhoto ? <img src={operatorPhoto} alt="" /> : <i>{operatorInitials || operatorName?.slice(0, 2)}</i>}<b>{operatorName}</b></span></div>
           <div className="call-mode-progress" aria-label={`Call ${callNumber} of ${totalCalls}`}><span style={{ width: `${totalCalls ? (callNumber / totalCalls) * 100 : 0}%` }} /></div>
           <div className="call-header-actions">
-            <label className="call-theme-control" title="Choose Call Mode theme"><Palette size={16} /><span>Call theme</span><select aria-label="Call Mode theme" value={callModeTheme} onChange={(event) => onCallModeThemeChange?.(event.target.value)}>{callThemeOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+            <label className="call-theme-control" title="Choose Call Mode theme"><Palette size={16} /><span>Call theme</span><select aria-label="Call Mode theme" value={callModeTheme} onChange={(event) => onCallModeThemeChange?.(event.target.value)}>{callThemeOptions.map(({ id, label }) => <option key={id} value={id}>{label}</option>)}</select></label>
             <button type="button" onClick={onClose} aria-label="Close call mode"><X size={21} /></button>
           </div>
         </header>
@@ -116,9 +110,9 @@ export function CallMode({
 
         <div className="call-mode-body">
           <div className="call-work-scroll">
-            {tab === 'coach' ? <div className="call-tab-stack coach-tab">
-              <ConversationCoach compact lead={lead} onChoose={(next, label, reset = false) => onUpdateLead({ conversationNode: next, conversationPath: reset ? [] : [...(lead.conversationPath || []), label] }, reset ? 'Conversation flow reset' : 'Conversation path chosen', label)} />
-              <SupplierContext lead={lead} compact />
+            {tab === 'flow' ? <div className="call-tab-stack coach-tab flow-tab">
+              <ConversationFlow compact lead={lead} companyProfile={companyProfile} operatorProfile={{ name: operatorName }} onChoose={(next, label, reset = false) => onUpdateLead({ conversationNode: next, conversationPath: reset ? [] : [...(lead.conversationPath || []), label] }, reset ? 'Conversation flow reset' : 'Conversation path chosen', label)} />
+              <SupplierContext lead={lead} companyProfile={companyProfile} compact />
               <ActivityTimeline items={lead.activityLog} compact limit={7} />
             </div> : null}
 
@@ -133,18 +127,18 @@ export function CallMode({
               <SampleWorkflow lead={lead} onUpdateLead={onUpdateLead} />
             </div> : null}
 
-            {tab === 'delivery' ? <div className="call-tab-stack"><DeliveryIntel lead={lead} userLocation={userLocation} onUpdateLead={onUpdateLead} /></div> : null}
+            {tab === 'delivery' ? <div className="call-tab-stack"><DeliveryIntel lead={lead} userLocation={userLocation} companyProfile={companyProfile} onUpdateLead={onUpdateLead} /></div> : null}
 
-            {tab === 'send' ? <div className="call-tab-stack send-tab"><ProfileSendPack lead={lead} operatorName={operatorName} onUpdateLead={onUpdateLead} onMarkSent={onSendProfile} /><SupplierContext lead={lead} /><ActivityTimeline items={lead.activityLog} limit={10} /></div> : null}
+            {tab === 'send' ? <div className="call-tab-stack send-tab"><ProfileSendPack lead={lead} operatorName={operatorName} companyProfile={companyProfile} onUpdateLead={onUpdateLead} onMarkSent={onSendProfile} /><SupplierContext lead={lead} companyProfile={companyProfile} /><ActivityTimeline items={lead.activityLog} limit={10} /></div> : null}
           </div>
 
           <aside className="call-command-rail">
-            <section className={`ready-check ${ready ? 'ready' : ''}`}><header><span>Ready for Pricing Desk?</span><strong>{ready ? 'READY' : `${readiness.filter((item) => item.ready).length}/${readiness.length}`}</strong></header><p className="final-quote-note">Reference only. Final quote requires Pricing Desk.</p>{readiness.map((item) => <p key={item.key} className={item.ready ? 'done' : ''}>{item.ready ? <CheckCircle2 size={15} /> : <i />}{item.label}</p>)}</section>
+            <section className={`ready-check ${ready ? 'ready' : ''}`}><header><span>Ready for {companyProfile?.approverLabel || 'management'}?</span><strong>{ready ? 'READY' : `${readiness.filter((item) => item.ready).length}/${readiness.length}`}</strong></header><p className="final-quote-note">Reference only. Final quote requires {companyProfile?.approverLabel || 'management'}.</p>{readiness.map((item) => <p key={item.key} className={item.ready ? 'done' : ''}>{item.ready ? <CheckCircle2 size={15} /> : <i />}{item.label}</p>)}</section>
             <label className="call-notes"><span>Live notes</span><textarea value={lead.notes} onChange={(event) => onUpdateLead({ notes: event.target.value })} placeholder="Objections, people, deadlines, missing price explanation..." maxLength={1200} /><small>{lead.notes.length}/1200</small></label>
             <div className="call-distance-note"><Navigation size={15} /><span>{distances.notes || 'Enable location and plot delivery to see route estimates.'}</span></div>
             <button type="button" className={`profile-call-action ${lead.profileSent ? 'complete' : ''}`} onClick={() => setTab('send')}><Send size={16} />{lead.profileSent ? 'Profile sent' : 'Open send pack'}<kbd>P</kbd></button>
-            <button type="button" className={`pricing-call-action ${lead.inPricingQueue ? 'complete' : ''}`} onClick={onMovePricing}><Check size={16} />{lead.inPricingQueue ? lead.pricingStage : 'Move to Pricing Desk queue'}</button>
-            {lead.inPricingQueue ? <button type="button" className="handoff-copy" onClick={() => copyText(buildHandoffMessage(lead, distances.notes, sourceContext), 'Handoff copied')}><Clipboard size={16} />{copied || 'Copy complete handoff'}</button> : null}
+            <button type="button" className={`pricing-call-action ${lead.inPricingQueue ? 'complete' : ''}`} onClick={onMovePricing}><Check size={16} />{lead.inPricingQueue ? lead.pricingStage : `Move to ${companyProfile?.approverLabel || 'management'} queue`}</button>
+            {lead.inPricingQueue ? <button type="button" className="handoff-copy" onClick={() => copyText(buildHandoffMessage(lead, distances.notes, sourceContext, companyProfile?.approverLabel || 'management'), 'Handoff copied')}><Clipboard size={16} />{copied || 'Copy complete handoff'}</button> : null}
           </aside>
         </div>
 

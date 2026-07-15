@@ -3,12 +3,12 @@ import { normalizeLead } from '../lib/leadModel.js'
 export const practiceLeads = [
   {
     id: 'practice-north-star', company: 'North Star Ready Mix (Practice)', region: 'NORTH',
-    location: 'Plaridel, Bulacan', phone: '0000 000 0401', email: 'purchasing@example.test',
+    location: 'Plaridel, Bulacan', phone: '0917 000 0101', email: 'purchasing@example.test',
     contactPerson: 'Maria Santos', contactRole: 'Purchasing', status: 'New Lead', priority: 'High',
   },
   {
     id: 'practice-cavite', company: 'Cavite BuildWorks (Practice)', region: 'SOUTH',
-    location: 'General Trias, Cavite', phone: '0000 000 0402', email: '', status: 'New Lead', priority: 'Medium',
+    location: 'General Trias, Cavite', phone: '0917 000 0202', email: '', status: 'New Lead', priority: 'Medium',
   },
   {
     id: 'practice-metro', company: 'Metro Concrete Lab (Practice)', region: 'NCR',

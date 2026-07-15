@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { seedSuppliers } from '../data/suppliers.js'
 import { buildHandoffMessage, CHECKLIST_LABELS, distanceIntelligence, QUICK_RESULTS, miniQuestProgress, pricingReadiness, sourceContextForLead } from '../lib/leadModel.js'
 import { ActivityTimeline } from './ActivityTimeline.jsx'
-import { ConversationCoach } from './ConversationCoach.jsx'
+import { ConversationFlow } from './ConversationFlow.jsx'
 import { DeliveryIntel } from './DeliveryIntel.jsx'
 import { ProfileSendPack } from './ProfileSendPack.jsx'
 import { SampleWorkflow } from './SampleWorkflow.jsx'
@@ -14,7 +14,7 @@ function Field({ label, children, wide = false }) {
 }
 
 export function LeadWorkspace({
-  lead, operatorName, userLocation, onUpdateLead, onSaveCall, onSendProfile,
+  lead, operatorName, companyProfile, userLocation, onUpdateLead, onSaveCall, onSendProfile,
   onMarkQuoteReady, onQuickResult, selectedCount, selectedLeads, onSelectLead,
 }) {
   const [tab, setTab] = useState('checklist')
@@ -45,7 +45,7 @@ export function LeadWorkspace({
         <div className="assistant-panel">
           <div className="assistant-title"><span className="section-label">Sales assistant</span><strong>{miniProgress}/7 mini quest</strong></div>
           <div className="assistant-tabs"><button className={tab === 'checklist' ? 'active' : ''} onClick={() => setTab('checklist')}>Mini quest</button><button className={tab === 'flow' ? 'active' : ''} onClick={() => setTab('flow')}>Conversation flow</button></div>
-          {tab === 'checklist' ? <div className="checklist">{CHECKLIST_LABELS.map((label, index) => <button key={label} onClick={() => { const checklist = [...lead.checklist]; checklist[index] = !checklist[index]; onUpdateLead({ checklist }, `${checklist[index] ? 'Completed' : 'Reopened'} mini quest`, label) }}><span>{index + 1}</span><p>{label}</p><i className={lead.checklist[index] ? 'done' : ''}>{lead.checklist[index] ? <Check size={13} /> : null}</i></button>)}</div> : <ConversationCoach lead={lead} onChoose={(next, label, reset = false) => onUpdateLead({ conversationNode: next, conversationPath: reset ? [] : [...(lead.conversationPath || []), label] }, reset ? 'Conversation flow reset' : 'Conversation path chosen', label)} />}
+          {tab === 'checklist' ? <div className="checklist">{CHECKLIST_LABELS.map((label, index) => <button key={label} onClick={() => { const checklist = [...lead.checklist]; checklist[index] = !checklist[index]; onUpdateLead({ checklist }, `${checklist[index] ? 'Completed' : 'Reopened'} mini quest`, label) }}><span>{index + 1}</span><p>{label}</p><i className={lead.checklist[index] ? 'done' : ''}>{lead.checklist[index] ? <Check size={13} /> : null}</i></button>)}</div> : <ConversationFlow lead={lead} companyProfile={companyProfile} operatorProfile={{ name: operatorName }} onChoose={(next, label, reset = false) => onUpdateLead({ conversationNode: next, conversationPath: reset ? [] : [...(lead.conversationPath || []), label] }, reset ? 'Conversation flow reset' : 'Conversation path chosen', label)} />}
         </div>
 
         <div className="quotation-panel">
@@ -61,20 +61,20 @@ export function LeadWorkspace({
           </div>
           <button className={`delivery-confirm-inline ${lead.deliveryLocationConfirmed ? 'active success' : ''}`} disabled={!lead.deliveryLocation} onClick={() => onUpdateLead({ deliveryLocationConfirmed: !lead.deliveryLocationConfirmed }, lead.deliveryLocationConfirmed ? 'Delivery confirmation reopened' : 'Delivery location confirmed', lead.deliveryLocation)}>{lead.deliveryLocationConfirmed ? <Check size={14} /> : <MapPin size={14} />}{lead.deliveryLocationConfirmed ? 'Delivery/project location confirmed' : 'Confirm delivery/project location'}</button>
           <div className="requirement-toggles"><button className={lead.sampleDocStatus === 'Required' ? 'active' : ''} onClick={() => onUpdateLead({ sampleDocStatus: 'Required' }, 'Sample/document status changed', 'Required')}>Sample/docs required</button><button className={lead.sampleDocStatus === 'Not required' ? 'active success' : ''} onClick={() => onUpdateLead({ sampleDocStatus: 'Not required', sampleRequired: false }, 'Sample/document status changed', 'Not required')}>Not required</button><button className={lead.profileSent ? 'active success' : ''} onClick={() => setSendPackOpen(true)}>Profile {lead.profileSent ? 'sent' : 'send pack'}</button><button className={lead.managementPricingNeeded ? 'active' : ''} onClick={() => onUpdateLead({ managementPricingNeeded: !lead.managementPricingNeeded }, 'Management pricing flag changed')}>Management pricing needed</button></div>
-          <div className="pricing-readiness-inline"><header><span>Ready for Pricing Desk?</span><strong>{readiness.filter((item) => item.ready).length}/{readiness.length}</strong></header>{readiness.map((item) => <p key={item.key} className={item.ready ? 'done' : ''}>{item.ready ? <CheckCircle2 size={13} /> : <i />}{item.label}</p>)}</div>
+          <div className="pricing-readiness-inline"><header><span>Ready for {companyProfile?.approverLabel || 'management'}?</span><strong>{readiness.filter((item) => item.ready).length}/{readiness.length}</strong></header>{readiness.map((item) => <p key={item.key} className={item.ready ? 'done' : ''}>{item.ready ? <CheckCircle2 size={13} /> : <i />}{item.label}</p>)}</div>
         </div>
 
-        <div className="lead-intel-grid"><DeliveryIntel compact lead={lead} userLocation={userLocation} onUpdateLead={onUpdateLead} /><SupplierContext lead={lead} /></div>
+        <div className="lead-intel-grid"><DeliveryIntel compact lead={lead} userLocation={userLocation} companyProfile={companyProfile} onUpdateLead={onUpdateLead} /><SupplierContext lead={lead} companyProfile={companyProfile} /></div>
         <SampleWorkflow lead={lead} onUpdateLead={onUpdateLead} />
-        {sendPackOpen ? <div className="lead-send-pack"><ProfileSendPack lead={lead} operatorName={operatorName} onUpdateLead={onUpdateLead} onMarkSent={onSendProfile} /></div> : null}
+        {sendPackOpen ? <div className="lead-send-pack"><ProfileSendPack lead={lead} operatorName={operatorName} companyProfile={companyProfile} onUpdateLead={onUpdateLead} onMarkSent={onSendProfile} /></div> : null}
 
         <div className="quick-results"><span className="section-label">Result after call</span><div>{QUICK_RESULTS.map((result) => <button key={result} className={lead.callResults?.[0]?.result === result ? 'active' : ''} onClick={() => onQuickResult(result)}>{result}</button>)}</div></div>
 
         <div className="notes-panel">
           <label><span>Call notes</span><textarea value={lead.notes} onChange={(event) => onUpdateLead({ notes: event.target.value })} placeholder="Context, objections, missing-price explanation, relationship notes..." maxLength={1200} /><small>{lead.notes.length} / 1200</small></label>
           <div className="action-grid"><button onClick={onSaveCall}><Save size={15} />Save call</button><button className={lead.profileSent ? 'complete' : ''} onClick={() => setSendPackOpen((value) => !value)}><Send size={15} />{lead.profileSent ? 'View send pack' : 'Open send pack'}</button></div>
-          <button className={`quote-action ${lead.inPricingQueue ? 'complete' : ''}`} onClick={onMarkQuoteReady}><Check size={17} />{lead.inPricingQueue ? 'In Pricing Desk pricing queue' : 'Move to Pricing Desk pricing queue'}</button>
-          {lead.inPricingQueue ? <button className="lead-handoff-copy" onClick={async () => { try { await navigator.clipboard.writeText(buildHandoffMessage(lead, distanceIntelligence(lead, userLocation.position).notes, sourceContextForLead(lead, seedSuppliers))); setCopied(true); window.setTimeout(() => setCopied(false), 1600) } catch { setCopied(false) } }}><Clipboard size={15} />{copied ? 'Handoff copied' : 'Copy Pricing Desk handoff'}</button> : null}
+          <button className={`quote-action ${lead.inPricingQueue ? 'complete' : ''}`} onClick={onMarkQuoteReady}><Check size={17} />{lead.inPricingQueue ? `In ${companyProfile?.approverLabel || 'management'} pricing queue` : `Move to ${companyProfile?.approverLabel || 'management'} pricing queue`}</button>
+          {lead.inPricingQueue ? <button className="lead-handoff-copy" onClick={async () => { try { const approverLabel = companyProfile?.approverLabel || 'pricing approver'; await navigator.clipboard.writeText(buildHandoffMessage(lead, distanceIntelligence(lead, userLocation.position).notes, sourceContextForLead(lead, seedSuppliers, approverLabel), approverLabel)); setCopied(true); window.setTimeout(() => setCopied(false), 1600) } catch { setCopied(false) } }}><Clipboard size={15} />{copied ? 'Handoff copied' : `Copy ${companyProfile?.approverLabel || 'management'} handoff`}</button> : null}
           <ActivityTimeline items={lead.activityLog} limit={6} compact />
         </div>
       </div>

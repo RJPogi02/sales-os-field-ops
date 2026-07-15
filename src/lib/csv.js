@@ -1,15 +1,16 @@
-import { normalizeLead, phoneKey } from './leadModel.js'
+import { importedLeadDraft, normalizeLead, sameImportIdentity } from './leadModel.js'
 
-const HEADER_ALIASES = {
-  company: ['company', 'company name', 'lead', 'business', 'business name'],
-  region: ['region', 'territory'],
-  location: ['location', 'address', 'plant location'],
-  phone: ['phone', 'phone number', 'contact number', 'mobile'],
-  email: ['email', 'email address'],
+export const CRM_HEADER_ALIASES = {
+  company: ['company', 'company name', 'lead', 'business', 'business name', 'account', 'account name'],
+  region: ['region', 'territory', 'area'],
+  location: ['location', 'address', 'plant location', 'plant address', 'branch address', 'business address'],
+  sourceWebsite: ['website', 'website url', 'site', 'company website', 'url'],
+  phone: ['phone', 'phone number', 'contact number', 'mobile', 'telephone', 'tel'],
+  email: ['email', 'email address', 'e-mail'],
   contactPerson: ['contactperson', 'contact person', 'contact', 'person'],
   contactRole: ['contactrole', 'contact role', 'role', 'department'],
-  status: ['status', 'lead status'],
-  notes: ['notes', 'remarks'],
+  status: ['status', 'lead status', 'stage'],
+  notes: ['notes', 'remarks', 'comment', 'comments'],
   materialNeeded: ['materialneeded', 'material needed', 'material'],
   volumeNeeded: ['volumeneeded', 'volume needed', 'volume'],
   deliveryLocation: ['deliverylocation', 'delivery location', 'project location'],
@@ -19,8 +20,29 @@ const HEADER_ALIASES = {
   commissionRate: ['commissionrate', 'commission rate', 'commission %'],
 }
 
+export const CRM_IMPORT_MAPPING_FIELDS = [
+  { key: 'company', label: 'Company', required: true },
+  { key: 'location', label: 'Location / address' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'email', label: 'Email' },
+  { key: 'sourceWebsite', label: 'Website' },
+  { key: 'region', label: 'Region' },
+  { key: 'status', label: 'Status' },
+  { key: 'notes', label: 'Notes' },
+]
+
 const cleanHeader = (value) => String(value || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ')
-const cleanIdentity = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+const cleanCell = (value) => value === null || value === undefined ? '' : String(value).trim()
+
+function stableImportId(sourceName, rowNumber, values) {
+  const source = `${sourceName}|${rowNumber}|${values.join('|')}`
+  let hash = 2166136261
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `import-${(hash >>> 0).toString(36)}-${rowNumber}`
+}
 
 export function parseCsvRows(text = '') {
   const rows = []
@@ -42,62 +64,159 @@ export function parseCsvRows(text = '') {
     else value += character
   }
   if (value || row.length) { row.push(value.replace(/\r$/, '')); rows.push(row) }
-  return rows.filter((item) => item.some((cell) => String(cell).trim()))
+  return rows.filter((item) => item.some((cell) => cleanCell(cell)))
+}
+
+export function tabularImportData(matrix = []) {
+  const usable = (Array.isArray(matrix) ? matrix : []).filter((row) => Array.isArray(row) && row.some((cell) => cleanCell(cell)))
+  if (!usable.length) return { headers: [], rows: [] }
+  const width = Math.max(...usable.map((row) => row.length))
+  const headers = Array.from({ length: width }, (_, index) => cleanCell(usable[0][index]) || `Column ${index + 1}`)
+  return {
+    headers,
+    rows: usable.slice(1).map((row) => Array.from({ length: width }, (_, index) => cleanCell(row[index]))),
+  }
+}
+
+export function inferCrmColumnMapping(headers = []) {
+  const normalized = headers.map(cleanHeader)
+  const used = new Set()
+  return Object.fromEntries(CRM_IMPORT_MAPPING_FIELDS.map((field) => {
+    const aliases = (CRM_HEADER_ALIASES[field.key] || [field.key]).map(cleanHeader)
+    const index = normalized.findIndex((header, candidateIndex) => !used.has(candidateIndex) && aliases.includes(header))
+    if (index >= 0) used.add(index)
+    return [field.key, index >= 0 ? String(index) : '']
+  }))
+}
+
+function normalizeImportRegion(value = '') {
+  const normalized = cleanHeader(value)
+  if (!normalized) return 'NCR'
+  if (['ncr', 'metro manila', 'national capital region'].includes(normalized)) return 'NCR'
+  if (normalized.includes('north') || normalized.includes('luzon north')) return 'NORTH'
+  if (normalized.includes('south') || normalized.includes('luzon south')) return 'SOUTH'
+  return String(value).trim().toUpperCase()
+}
+
+export function mapCrmImportRows(headers = [], rawRows = [], mapping = {}, options = {}) {
+  const rows = []
+  const missingRequired = []
+  const mappedFields = CRM_IMPORT_MAPPING_FIELDS.filter(({ key }) => {
+    const columnIndex = Number.parseInt(mapping[key], 10)
+    return Number.isInteger(columnIndex) && columnIndex >= 0 && columnIndex < headers.length
+  }).map(({ key }) => key)
+  let blankRows = 0
+  rawRows.forEach((cells, index) => {
+    const values = {}
+    CRM_IMPORT_MAPPING_FIELDS.forEach(({ key }) => {
+      const columnIndex = Number.parseInt(mapping[key], 10)
+      if (Number.isInteger(columnIndex) && columnIndex >= 0 && columnIndex < headers.length) values[key] = cleanCell(cells[columnIndex])
+    })
+    if (!Object.values(values).some(Boolean)) { blankRows += 1; return }
+    if (values.region) values.region = normalizeImportRegion(values.region)
+    const providedFields = mappedFields.filter((field) => values[field] !== '' && values[field] !== null && values[field] !== undefined)
+    const draft = importedLeadDraft(values, {
+      visibility: options.visibility,
+      sourceName: options.sourceName,
+      leadSource: options.leadSource,
+      rowNumber: index + 2,
+      mappedFields,
+      providedFields,
+    })
+    const row = {
+      ...draft,
+      id: stableImportId(options.sourceName || 'crm-import', index + 2, cells),
+    }
+    if (draft.importMissingFields.length) missingRequired.push({ row, rowNumber: index + 2, fields: draft.importMissingFields })
+    rows.push(row)
+  })
+  return { rows, missingRequired, blankRows }
+}
+
+export async function readCrmImportFile(file) {
+  if (!file) return { headers: [], rows: [], fileType: '' }
+  const extension = String(file.name || '').split('.').pop().toLowerCase()
+  if (extension === 'xlsx') {
+    const { default: readXlsxFile } = await import('read-excel-file')
+    const matrix = await readXlsxFile(file)
+    return { ...tabularImportData(matrix), fileType: 'xlsx' }
+  }
+  if (extension !== 'csv') throw new Error('Choose a CSV or XLSX file.')
+  return { ...tabularImportData(parseCsvRows(await file.text())), fileType: 'csv' }
 }
 
 export function csvToLeadRows(text = '') {
-  const rows = parseCsvRows(text)
-  if (rows.length < 2) return []
-  const headers = rows[0].map(cleanHeader)
-  const fieldByIndex = headers.map((header) => Object.entries(HEADER_ALIASES).find(([, aliases]) => aliases.includes(header))?.[0] || header.replace(/\s+/g, ''))
-  return rows.slice(1).map((cells, rowIndex) => {
-    const lead = {}
-    fieldByIndex.forEach((field, index) => { if (field && cells[index] !== undefined) lead[field] = String(cells[index]).trim() })
-    return { ...lead, id: lead.id || `import-${Date.now()}-${rowIndex}`, leadSource: 'CSV import' }
-  }).filter((lead) => lead.company || lead.phone || lead.email)
+  const data = tabularImportData(parseCsvRows(text))
+  if (!data.headers.length || !data.rows.length) return []
+  const mapping = inferCrmColumnMapping(data.headers)
+  return mapCrmImportRows(data.headers, data.rows, mapping, { visibility: 'private', leadSource: 'CSV import' }).rows
 }
 
-export function findLeadMatch(leads, candidate) {
-  const candidatePhone = phoneKey(candidate.phone)
-  const candidateEmail = String(candidate.email || '').trim().toLowerCase()
-  const candidateCompany = cleanIdentity(candidate.company)
-  return leads.find((lead) => {
-    if (candidatePhone && candidatePhone === phoneKey(lead.phone)) return true
-    if (candidateEmail && candidateEmail === String(lead.email || '').trim().toLowerCase()) return true
-    return candidateCompany && candidateCompany === cleanIdentity(lead.company)
-  })
+export function findLeadMatch(leads = [], candidate = {}) {
+  return leads.find((lead) => sameImportIdentity(lead, candidate))
 }
 
 export function previewCrmMerge(currentLeads = [], importedRows = []) {
   let added = 0
   let updated = 0
+  let duplicates = 0
+  const seenRows = []
   const rows = importedRows.map((row) => {
-    const match = findLeadMatch(currentLeads, row)
-    if (match) updated += 1
+    const duplicate = findLeadMatch(seenRows, row)
+    const match = duplicate ? undefined : findLeadMatch(currentLeads, row)
+    let action = 'Add'
+    if (duplicate) { duplicates += 1; action = 'Duplicate' }
+    else if (match) { updated += 1; action = 'Update' }
     else added += 1
-    return { row, matchId: match?.id || '', action: match ? 'Update' : 'Add' }
+    seenRows.push(row)
+    return { row, matchId: match?.id || duplicate?.id || '', action }
   })
-  return { rows, added, updated }
+  return { rows, added, updated, duplicates, missingRequired: importedRows.filter((row) => row.importMissingFields?.length).length }
 }
 
 export function mergeCrmLeads(currentLeads = [], importedRows = [], mode = 'merge') {
   const next = [...currentLeads]
+  const seenRows = []
   let added = 0
   let updated = 0
+  let matches = 0
+  let duplicates = 0
   importedRows.forEach((row, index) => {
+    if (findLeadMatch(seenRows, row)) { duplicates += 1; return }
+    seenRows.push(row)
     const match = findLeadMatch(next, row)
     if (match) {
+      matches += 1
       if (mode === 'add-only') return
       const position = next.findIndex((lead) => lead.id === match.id)
-      const nonEmpty = Object.fromEntries(Object.entries(row).filter(([, value]) => value !== '' && value !== null && value !== undefined))
-      next[position] = normalizeLead({ ...match, ...nonEmpty, id: match.id, leadSource: match.leadSource || 'CSV import' })
+      const providedFields = Array.isArray(row.importProvidedFields) ? new Set(row.importProvidedFields) : null
+      const nonEmpty = Object.fromEntries(Object.entries(row).filter(([field, value]) => {
+        if (value === '' || value === null || value === undefined) return false
+        return !providedFields || providedFields.has(field)
+      }))
+      next[position] = normalizeLead({
+        ...match,
+        ...nonEmpty,
+        id: match.id,
+        visibility: match.visibility,
+        ownerId: match.ownerId,
+        ownerName: match.ownerName,
+        leadSource: match.leadSource || row.leadSource || 'CRM import',
+      })
       updated += 1
       return
     }
     next.push(normalizeLead({ ...row, id: row.id || `import-${Date.now()}-${index}` }))
     added += 1
   })
-  return { leads: next, added, updated }
+  return {
+    leads: next,
+    added,
+    updated,
+    matches,
+    duplicates,
+    missingRequired: importedRows.filter((row) => row.importMissingFields?.length).length,
+  }
 }
 
 export function csvTextForLeads(fields, leads) {

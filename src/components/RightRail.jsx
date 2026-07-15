@@ -6,12 +6,12 @@ import { useMemo, useState } from 'react'
 import { ACHIEVEMENTS } from '../lib/leadModel.js'
 import { OperatorCompanion } from './OperatorCompanion.jsx'
 
-function adviceFor(metrics) {
+function adviceFor(metrics, callGoal = 20, approverLabel = 'pricing approver') {
   const answeredRate = metrics.calls ? Math.round((metrics.answered / metrics.calls) * 100) : 0
-  if (metrics.quotes >= 5) return 'Generate report, export CRM, and prepare Pricing Desk handoff.'
+  if (metrics.quotes >= 5) return `Generate report, export CRM, and prepare the ${approverLabel} handoff.`
   if (metrics.answered > 0 && metrics.profiles === 0) return `You reached ${metrics.answered} real ${metrics.answered === 1 ? 'person' : 'people'} but sent no profiles. Confirm email and send the company profile before the lead cools.`
   if (metrics.profiles > 0 && metrics.quotes === 0) return 'You are opening doors. Ask material, volume, delivery location, and target/current price next.'
-  if (metrics.calls >= 20 && answeredRate < 20) return `Answer rate is ${answeredRate}%. Try another time block and prioritize leads with verified phone + email.`
+  if (metrics.calls >= callGoal && answeredRate < 20) return `Answer rate is ${answeredRate}%. Try another time block and prioritize leads with verified phone + email.`
   if (metrics.calls < 5) return 'Start with 5 calls first to build rhythm.'
   if (answeredRate < 25) return 'Try another time block and prioritize complete phone numbers.'
   return 'Keep the loop tight: result, profile, requirements, next lead.'
@@ -38,11 +38,14 @@ function RailSection({ id, title, badge, open, onToggle, children, className = '
 }
 
 export function RightRail({
+  companyProfile = {},
   selectedCount, quoteCount, answeredCount, callsMade, profileCount, sampleCount, pricingCount,
   xp, nextXp, rank, achievements = [], streak, profile, quoteLeads, onOpenLead, daily, leads, metrics,
   conversionCounts = { retry: 0, research: 0, profiles: 0, followups: 0 }, onOpenConversion,
   collapsed = false, onToggleCollapsed, companionMode = 'full', companionState = 'idle', reducedMotion = false,
+  goals = { selected: 20, quotes: 2, profiles: 5, answered: 5, warm: 3 },
 }) {
+  const approverLabel = companyProfile.approverLabel || 'Pricing approver'
   const [open, setOpen] = useState({ mission: true, xp: true, achievements: true, stats: true, conversion: true, pricing: true })
   const [statsOpen, setStatsOpen] = useState(false)
   const [achievementsOpen, setAchievementsOpen] = useState(false)
@@ -67,7 +70,7 @@ export function RightRail({
         <span title="Calls today"><PhoneCall size={14} /><b>{callsMade}</b><small>Calls</small></span>
         <span title="Profiles sent"><Send size={14} /><b>{profileCount}</b><small>Profiles</small></span>
         <span title="Quote-ready"><Target size={14} /><b>{quoteCount}</b><small>Ready</small></span>
-        <span title="Pricing Desk queue"><WalletCards size={14} /><b>{quoteLeads.length}</b><small>Pricing</small></span>
+        <span title={`${approverLabel} queue`}><WalletCards size={14} /><b>{quoteLeads.length}</b><small>Pricing</small></span>
       </div>
       {companionMode !== 'off' ? <OperatorCompanion xp={xp} mode={companionState} size="tiny" showLabel={false} reducedMotion={reducedMotion} /> : null}
     </aside>
@@ -77,11 +80,11 @@ export function RightRail({
     <aside className="right-rail">
       <button className="right-rail-collapse" onClick={onToggleCollapsed} aria-label="Collapse performance rail"><PanelRightOpen size={15} />Collapse rail</button>
       <RailSection id="mission" title="Mission progress" open={open.mission} onToggle={toggle}>
-        <Metric label="Pick 20 leads" value={selectedCount} goal={20} />
-        <Metric label="Get 2 quotation-ready" value={quoteCount} goal={2} />
-        <Metric label="Send 5+ profiles" value={profileCount} goal={5} />
-        <Metric label="Real people answered" value={answeredCount} goal={5} />
-        <Metric label="Warm leads captured" value={Number(metrics?.warm || 0)} goal={3} />
+        <Metric label={`Pick ${goals.selected} leads`} value={selectedCount} goal={goals.selected} />
+        <Metric label={`Get ${goals.quotes} quotation-ready`} value={quoteCount} goal={goals.quotes} />
+        <Metric label={`Send ${goals.profiles}+ profiles`} value={profileCount} goal={goals.profiles} />
+        <Metric label="Real people answered" value={answeredCount} goal={goals.answered} />
+        <Metric label="Warm leads captured" value={Number(metrics?.warm || 0)} goal={goals.warm} />
       </RailSection>
 
       <RailSection id="xp" title="XP & rank" open={open.xp} onToggle={toggle} className="xp-card" badge={`L${level}`}>
@@ -154,12 +157,12 @@ export function RightRail({
         <button onClick={onOpenConversion}><Clock3 size={15} /><span><strong>{conversionCounts.followups}</strong>Profile follow-ups</span></button>
       </RailSection>
 
-      <RailSection id="pricing" title="Pricing Desk pricing queue" badge={quoteLeads.length} open={open.pricing} onToggle={toggle} className="pricing-card">
+      <RailSection id="pricing" title={`${approverLabel} pricing queue`} badge={quoteLeads.length} open={open.pricing} onToggle={toggle} className="pricing-card">
         {quoteLeads.slice(0, 4).map((lead) => <button key={lead.id} onClick={() => onOpenLead(lead.id)}><strong>{lead.company}</strong><span>{lead.materialNeeded || 'Material needed'}</span><em>{lead.pricingStage || lead.quotationStatus}</em></button>)}
         {quoteLeads.length === 0 ? <p className="empty-state">Quotation-ready leads appear here.</p> : null}
       </RailSection>
 
-      {statsOpen ? <StatsPopout metrics={metrics} calls={todayCalls} advice={adviceFor(metrics)} onClose={() => setStatsOpen(false)} /> : null}
+      {statsOpen ? <StatsPopout metrics={metrics} calls={todayCalls} approverLabel={approverLabel} advice={adviceFor(metrics, goals.calls, approverLabel)} onClose={() => setStatsOpen(false)} /> : null}
       {achievementsOpen ? <AchievementsPopout unlocked={unlocked} onClose={() => setAchievementsOpen(false)} /> : null}
     </aside>
   )
@@ -173,7 +176,7 @@ function AchievementPill({ item, unlocked }) {
   return <span className={`achievement-pill ${unlocked ? 'unlocked' : 'locked'}`}><i>{item.icon}</i>{item.label}</span>
 }
 
-function StatsPopout({ metrics, calls, advice, onClose }) {
+function StatsPopout({ metrics, calls, advice, approverLabel, onClose }) {
   const answeredRate = metrics.calls ? Math.round((metrics.answered / metrics.calls) * 100) : 0
   return (
     <div className="modal-backdrop rail-popout-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -185,7 +188,7 @@ function StatsPopout({ metrics, calls, advice, onClose }) {
           <Stat label="Profiles sent" value={metrics.profiles} />
           <Stat label="Quote-ready" value={metrics.quotes} />
           <Stat label="Samples" value={metrics.samples} />
-          <Stat label="Pricing Desk handoffs" value={metrics.pricing} />
+          <Stat label={`${approverLabel} handoffs`} value={metrics.pricing} />
           <Stat label="Retry queue" value={metrics.retries || 0} />
           <Stat label="Research queue" value={metrics.invalid || 0} />
           <Stat label="Warm leads" value={metrics.warm || 0} />

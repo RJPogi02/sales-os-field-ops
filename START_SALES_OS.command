@@ -16,6 +16,6 @@ if [ ! -d "node_modules" ]; then
 fi
 
 (sleep 2; open "http://127.0.0.1:5173") &
-echo "Sales OS v0.071 is starting at http://127.0.0.1:5173"
+echo "Sales OS v0.09 is starting at http://127.0.0.1:5173"
 echo "Keep this window open while using the app."
 npm run dev -- --host 127.0.0.1

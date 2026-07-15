@@ -21,6 +21,6 @@ if not exist node_modules (
 )
 
 start "" http://127.0.0.1:5173
-echo Sales OS v0.071 is starting at http://127.0.0.1:5173
+echo Sales OS v0.09 is starting at http://127.0.0.1:5173
 echo Keep this window open while using the app.
 call npm.cmd run dev -- --host 127.0.0.1

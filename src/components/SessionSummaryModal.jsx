@@ -1,6 +1,6 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Download, Mail, PhoneCall, RotateCcw, UsersRound, X } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Download, ListTodo, Mail, PhoneCall, RotateCcw, UsersRound, X } from 'lucide-react'
 
-export function SessionSummaryModal({ metrics, retryCount, invalidCount, warmCount, onClose, onAction }) {
+export function SessionSummaryModal({ metrics, callGoal = 20, retryCount, invalidCount, warmCount, onClose, onAction }) {
   const nextAction = metrics.answered > 0 && metrics.profiles === 0
     ? 'Send profiles to every answered lead before the momentum gets cold.'
     : retryCount > 0
@@ -11,7 +11,7 @@ export function SessionSummaryModal({ metrics, retryCount, invalidCount, warmCou
   return (
     <div className="modal-backdrop session-summary-backdrop" role="presentation">
       <section className="session-summary-modal panel" role="dialog" aria-modal="true" aria-label="Calling session summary">
-        <header><div><span className="section-label">20-call debrief</span><h2>Calling block complete</h2><p>You finished the roster. Now convert the useful conversations and recycle the unanswered ones.</p></div><button onClick={onClose} aria-label="Close session summary"><X size={19} /></button></header>
+        <header><div><span className="section-label">{callGoal}-call debrief</span><h2>Calling block complete</h2><p>You finished the roster. Now convert the useful conversations and recycle the unanswered ones.</p></div><button onClick={onClose} aria-label="Close session summary"><X size={19} /></button></header>
         <div className="session-summary-grid">
           <article><PhoneCall size={18} /><span>Calls made</span><strong>{metrics.calls}</strong></article>
           <article><UsersRound size={18} /><span>Real people</span><strong>{metrics.answered}</strong></article>
@@ -24,6 +24,7 @@ export function SessionSummaryModal({ metrics, retryCount, invalidCount, warmCou
         <div className="session-next-action"><ArrowRight size={20} /><div><span>Recommended next move</span><strong>{nextAction}</strong></div></div>
         <div className="session-actions">
           <button onClick={() => onAction('conversion')}>Open Conversion Desk</button>
+          <button onClick={() => onAction('tasks')}><ListTodo size={15} />Plan the rest of the day</button>
           <button onClick={() => onAction('reports')}>Generate Daily Report</button>
           <button onClick={() => onAction('export')}><Download size={15} />Export CRM CSV</button>
         </div>

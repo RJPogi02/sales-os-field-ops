@@ -9,7 +9,7 @@ function ExecutionGate({ number, label, value, goal }) {
   return <div className={`execution-gate ${complete ? 'complete' : ''}`}><span>{complete ? <Check size={11} /> : number}</span><p>{label}</p><strong>{value}/{goal}</strong></div>
 }
 
-export function MissionRail({ selectedCount, answeredCount, quoteCount, capturedCount, profileCount, pricingCount, onStartCall, activeCall, operatorName }) {
+export function MissionRail({ selectedCount, answeredCount, quoteCount, capturedCount, profileCount, pricingCount, onStartCall, activeCall, operatorName, goals = { selected: 20, answered: 5, quotes: 2, warm: 3, profiles: 5, pricing: 2 } }) {
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
   const firstName = operatorName.trim().split(/\s+/)[0] || 'Operator'
@@ -19,16 +19,16 @@ export function MissionRail({ selectedCount, answeredCount, quoteCount, captured
       <div className="daily-mission">
         <div className="section-label"><span>Main quest</span><span>Tomorrow-ready workflow</span></div>
         <div className="mission-steps">
-          <MissionStep number="1" label="Pick 20 leads" value={selectedCount} goal={20} />
+          <MissionStep number="1" label={`Pick ${goals.selected} leads`} value={selectedCount} goal={goals.selected} />
           <ArrowRight className="step-arrow" size={18} />
-          <MissionStep number="2" label="Reach 5 real people" value={answeredCount} goal={5} />
+          <MissionStep number="2" label={`Reach ${goals.answered} real people`} value={answeredCount} goal={goals.answered} />
           <ArrowRight className="step-arrow" size={18} />
-          <MissionStep number="3" label="Get 2 quotation-ready leads" value={quoteCount} goal={2} />
+          <MissionStep number="3" label={`Get ${goals.quotes} quotation-ready`} value={quoteCount} goal={goals.quotes} />
         </div>
         <div className="execution-gates" aria-label="Mission execution gates">
-          <ExecutionGate number="4" label="Capture 3 warm requirements" value={capturedCount} goal={3} />
-          <ExecutionGate number="5" label="Send company profile" value={profileCount} goal={5} />
-          <ExecutionGate number="6" label="Move serious leads to pricing" value={pricingCount} goal={2} />
+          <ExecutionGate number="4" label={`Capture ${goals.warm} warm requirements`} value={capturedCount} goal={goals.warm} />
+          <ExecutionGate number="5" label="Send company profile" value={profileCount} goal={goals.profiles} />
+          <ExecutionGate number="6" label="Move serious leads to pricing" value={pricingCount} goal={goals.pricing} />
         </div>
       </div>
       <button className={`primary-action ${activeCall ? 'calling' : ''}`} onClick={onStartCall}><Phone size={16} />{activeCall ? 'Call in progress' : 'Start next call'}</button>
