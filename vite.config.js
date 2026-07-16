@@ -1,5 +1,23 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { copyFileSync, mkdirSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const projectRoot = dirname(fileURLToPath(import.meta.url))
+
+function sitesHostingMetadata() {
+  return {
+    name: 'sites-hosting-metadata',
+    apply: 'build',
+    closeBundle() {
+      const source = resolve(projectRoot, '.openai', 'hosting.json')
+      const target = resolve(projectRoot, 'dist', '.openai', 'hosting.json')
+      mkdirSync(dirname(target), { recursive: true })
+      copyFileSync(source, target)
+    },
+  }
+}
 
 export default defineConfig(async () => {
   // Keep Cloudflare's local build state inside the project. GitHub Pages keeps
@@ -8,7 +26,7 @@ export default defineConfig(async () => {
   process.env.WRANGLER_LOG_PATH ??= '.wrangler/logs'
   process.env.MINIFLARE_REGISTRY_PATH ??= '.wrangler/registry'
 
-  const plugins = [react()]
+  const plugins = [react(), sitesHostingMetadata()]
   if (!process.env.GITHUB_ACTIONS) {
     const { cloudflare } = await import('@cloudflare/vite-plugin')
     plugins.push(cloudflare())
