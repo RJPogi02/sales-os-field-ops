@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
-import rawLeads from './data/leads.json'
 import { practiceLeads } from './data/practiceLeads.js'
 import { CallMode } from './components/CallMode.jsx'
 import { AnsweredFollowUpModal } from './components/AnsweredFollowUpModal.jsx'
@@ -42,7 +41,10 @@ import {
   leadQueueEligibility, missionGoalsForCallTarget, phoneCountsForLeads, phoneKey, pricingReadiness, profileOpportunityLeads, rankForXp, resultAnswered, retryPatchForLead, todayKey, withActivity,
 } from './lib/leadModel.js'
 
-const seedLeads = rawLeads.map((lead) => normalizeLead({ ...lead, selected: false, answered: false, quoteReady: false, inPricingQueue: false, quoteReadyToday: false, profileSent: false, checklist: Array(7).fill(false) }))
+// Customer records are never shipped in the public application bundle.
+// Existing installations keep their browser-local CRM; new users start empty
+// and receive shared records only after authenticated team sync.
+const seedLeads = []
 const initialsForName = (name = '') => name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'OP'
 const defaultProfile = {
   name: defaultCompanyProfile.operatorName, initials: initialsForName(defaultCompanyProfile.operatorName), company: defaultCompanyProfile.companyName, position: defaultCompanyProfile.operatorRole,
@@ -112,10 +114,10 @@ function initialOperators() {
   const daily = migrateDaily()
   let selectedLeadIds = []
   try { selectedLeadIds = (JSON.parse(localStorage.getItem('sales-os-leads-v6') || '[]') || []).filter((lead) => lead.selected).map((lead) => lead.id) } catch { /* use empty roster */ }
-  return [{ id: 'operator-rj', profile, progress, daily, selectedLeadIds }]
+  return [{ id: 'operator-default', profile, progress, daily, selectedLeadIds }]
 }
 
-function App() {
+function App({ hostedTeamConfig = null }) {
   const [leads, setLeads] = usePersistentState('sales-os-leads-v6', migrateLeads, reviveLeads)
   const [daily, setDaily] = usePersistentState('sales-os-daily-v6', migrateDaily)
   const [progress, setProgress] = usePersistentState('sales-os-progress-v6', migrateProgress)
@@ -131,7 +133,7 @@ function App() {
   })
   const [territory, setTerritory] = usePersistentState('sales-os-territory-v1', 'ALL')
   const [operators, setOperators] = usePersistentState('sales-os-operators-v1', initialOperators)
-  const [activeOperatorId, setActiveOperatorId] = usePersistentState('sales-os-active-operator-v1', 'operator-rj')
+  const [activeOperatorId, setActiveOperatorId] = usePersistentState('sales-os-active-operator-v1', 'operator-default')
   const [tasks, setTasks] = usePersistentState('sales-os-tasks-v1', [])
   const [performanceHistory, setPerformanceHistory] = usePersistentState('sales-os-performance-history-v1', [])
   const [deviceLock, setDeviceLock] = usePersistentState('sales-os-device-lock-v1', { enabled: false })
@@ -168,9 +170,11 @@ function App() {
   })
   const userLocation = useUserLocation()
   const today = todayKey()
+  const managedTeamConnection = Boolean(hostedTeamConfig?.url && hostedTeamConfig?.anonKey)
+  const effectiveTeamConfig = managedTeamConnection ? hostedTeamConfig : teamConfig
   const teamClient = useMemo(() => {
-    try { return createTeamSyncClient(teamConfig, teamSession, { onSession: setTeamSession }) } catch { return null }
-  }, [setTeamSession, teamConfig, teamSession])
+    try { return createTeamSyncClient(effectiveTeamConfig, teamSession, { onSession: setTeamSession }) } catch { return null }
+  }, [effectiveTeamConfig, setTeamSession, teamSession])
   const currentTeamMembership = useMemo(() => membershipForUser(teamSnapshot.memberships, teamSession?.user?.id) || (teamWorkspace?.id && teamSession?.user?.id ? {
     user_id: teamSession.user.id,
     role: teamWorkspace.role || (String(teamWorkspace.created_by || '') === String(teamSession.user.id) ? 'owner' : 'rep'),
@@ -189,6 +193,16 @@ function App() {
   useEffect(() => {
     if (activeView === 'manager' && !managerDashboardAllowed) setActiveView('mission')
   }, [activeView, managerDashboardAllowed])
+
+  useEffect(() => {
+    if (!managedTeamConnection) return
+    if (!teamCapabilities.active) {
+      setActiveView('team')
+      setOnboardingOpen(false)
+      return
+    }
+    if (!onboardingComplete) setOnboardingOpen(true)
+  }, [managedTeamConnection, onboardingComplete, teamCapabilities.active])
 
   useEffect(() => {
     if (mainContentRef.current) mainContentRef.current.scrollTop = 0
@@ -312,6 +326,10 @@ function App() {
   const deleteTask = (id) => setTasks((current) => current.filter((task) => task.id !== id))
 
   const saveTeamConfig = async (next) => {
+    if (managedTeamConnection) {
+      notify('The hosted company connection is managed automatically.')
+      return
+    }
     setTeamConfig(next)
     setTeamSession(null)
     setTeamWorkspace(null)
@@ -321,14 +339,14 @@ function App() {
   }
 
   const signInTeam = async ({ email, password }) => {
-    const session = await createTeamSyncClient(teamConfig, null).signIn(email, password)
+    const session = await createTeamSyncClient(effectiveTeamConfig, null).signIn(email, password)
     setTeamSession(session)
     setTeamSyncState({ status: 'signed-in', error: '', lastSyncedAt: '' })
     notify('Signed in. Create or join the company workspace next.')
   }
 
   const signUpTeam = async ({ email, password, displayName }) => {
-    const result = await createTeamSyncClient(teamConfig, null).signUp(email, password, displayName || profile.name)
+    const result = await createTeamSyncClient(effectiveTeamConfig, null).signUp(email, password, displayName || profile.name)
     if (result.pendingConfirmation) {
       setTeamSyncState({ status: 'configured', error: '', lastSyncedAt: '' })
       notify('Account created. Confirm the email, then sign in.')
@@ -344,7 +362,7 @@ function App() {
     setTeamSession(null)
     setTeamWorkspace(null)
     setTeamSnapshot({ memberships: [], claims: [], callEvents: [], tasks: [] })
-    setTeamSyncState({ status: teamConfig.url ? 'configured' : 'local', error: '', lastSyncedAt: '' })
+    setTeamSyncState({ status: effectiveTeamConfig.url ? 'configured' : 'local', error: '', lastSyncedAt: '' })
     notify('Team session signed out. Local CRM remains available.')
   }
 
@@ -1128,9 +1146,9 @@ function App() {
       setTeamSession(null)
       setTeamWorkspace(null)
       setTeamSnapshot({ memberships: [], claims: [], callEvents: [], tasks: [] })
-      setTeamSyncState({ status: teamConfig.url ? 'configured' : 'local', error: '', lastSyncedAt: '' })
+      setTeamSyncState({ status: effectiveTeamConfig.url ? 'configured' : 'local', error: '', lastSyncedAt: '' })
       setValidatedTeamCallId('')
-    } else if (nextTeamConfig?.url && (nextTeamConfig.url !== teamConfig.url || nextTeamConfig.anonKey !== teamConfig.anonKey)) {
+    } else if (!managedTeamConnection && nextTeamConfig?.url && (nextTeamConfig.url !== teamConfig.url || nextTeamConfig.anonKey !== teamConfig.anonKey)) {
       await saveTeamConfig(nextTeamConfig)
     }
     setOnboardingComplete(true)
@@ -1211,6 +1229,17 @@ function App() {
     return <DeviceLockScreen operatorName={profile.name} company={profile.company} theme={theme} onUnlock={unlockDevice} onReset={resetFromDeviceLock} />
   }
 
+  const teamWorkspaceView = <TeamWorkspace config={effectiveTeamConfig} managedTeamConnection={managedTeamConnection} session={teamSession} workspace={teamWorkspace} syncState={teamSyncState} memberships={teamSnapshot.memberships} membership={currentTeamMembership} callEvents={teamSnapshot.callEvents} claims={teamSnapshot.claims} teamTasks={teamSnapshot.tasks} activeOperator={{ id: activeOperatorId, name: profile.name, profile }} onConfigChange={saveTeamConfig} onSignIn={signInTeam} onSignUp={signUpTeam} onSignOut={signOutTeam} onCreateOrganization={createTeamWorkspace} onJoinOrganization={joinTeamWorkspace} onCheckMembership={() => refreshTeamMembership({ quiet: false })} onSync={() => syncTeam({ push: true })} onReleaseClaim={releaseTeamClaim} onSetOpenJoin={setTeamOpenJoin} onReviewMembership={reviewTeamMembership} onChangeMemberRole={changeTeamMemberRole} onAssignTask={assignTeamTask} />
+
+  if (managedTeamConnection && !teamCapabilities.active) {
+    return (
+      <div style={appStyle} className={`app hosted-access-shell theme-${theme}${['midnight', 'orchid', 'aurora'].includes(theme) ? ' dark' : ''} background-${appearance.background || 'auto'}`}>
+        <main className="main-content hosted-access-main">{teamWorkspaceView}</main>
+        {toast ? <div className="toast" role="status">{toast}</div> : null}
+      </div>
+    )
+  }
+
   return (
     <div style={appStyle} className={`app view-${activeView} theme-${theme}${['midnight', 'orchid', 'aurora'].includes(theme) ? ' dark' : ''} background-${appearance.background || 'auto'}${appearance.dimBackground ? ' dim-background' : ''}${appearance.reducedMotion ? ' reduced-motion' : ''}${effectiveLeftCollapsed ? ' left-collapsed' : ''}${effectiveRightCollapsed ? ' right-collapsed' : ''}${focusMode ? ' focus-mode' : ''}${demoMode ? ' demo-mode' : ''}${practiceSession.active ? ' practice-mode' : ''}`}>
       <SystemRail theme={theme} onThemeChange={changeTheme} territory={territory} onTerritoryChange={setTerritory} profile={profile} onLogoChange={changeLogo} onOpenSettings={() => setSettingsOpen(true)} leftCollapsed={effectiveLeftCollapsed} onToggleLeft={() => focusMode ? setFocusMode(false) : setLeftSidebarCollapsed((value) => !value)} rightCollapsed={effectiveRightCollapsed} onToggleRight={() => focusMode ? setFocusMode(false) : setRightRailCollapsed((value) => !value)} focusMode={focusMode} onToggleFocus={() => setFocusMode((value) => !value)} onOpenOnboarding={() => setOnboardingOpen(true)} practiceMode={practiceSession.active} demoMode={demoMode} teamConnected={teamConnected} />
@@ -1224,7 +1253,7 @@ function App() {
         {activeView === 'conversion' ? <ConversionDesk leads={leads} onUpdateLead={updateLead} onOpenLead={(id) => openLead(id)} onCallLead={startCallForLead} /> : null}
         <LeadFinderView hidden={activeView !== 'finder'} leads={leads} territory={territory} endpoint={profile.leadSearchEndpoint || NOMINATIM_DEFAULT_ENDPOINT} provider={profile.leadSearchProvider || 'nominatim'} googleApiKey={profile.googlePlacesApiKey || ''} operatorId={queueActorId} operatorName={profile.name} onProviderChange={(value) => setProfile((current) => ({ ...current, leadSearchProvider: value }))} onGoogleApiKeyChange={(value) => setProfile((current) => ({ ...current, googlePlacesApiKey: value }))} onOpenSettings={() => setSettingsOpen(true)} onAddDiscoveredLeads={addDiscoveredLeads} />
         {activeView === 'crm' ? <CrmView leads={leads} onUpdateLead={updateLead} onAddLead={addLead} onDeleteLead={deleteLead} onOpenLead={(id) => openLead(id)} onExport={exportCsv} onImport={importCrmRows} /> : null}
-        {activeView === 'team' ? <TeamWorkspace config={teamConfig} session={teamSession} workspace={teamWorkspace} syncState={teamSyncState} memberships={teamSnapshot.memberships} membership={currentTeamMembership} callEvents={teamSnapshot.callEvents} claims={teamSnapshot.claims} teamTasks={teamSnapshot.tasks} activeOperator={{ id: activeOperatorId, name: profile.name, profile }} onConfigChange={saveTeamConfig} onSignIn={signInTeam} onSignUp={signUpTeam} onSignOut={signOutTeam} onCreateOrganization={createTeamWorkspace} onJoinOrganization={joinTeamWorkspace} onCheckMembership={() => refreshTeamMembership({ quiet: false })} onSync={() => syncTeam({ push: true })} onReleaseClaim={releaseTeamClaim} onSetOpenJoin={setTeamOpenJoin} onReviewMembership={reviewTeamMembership} onChangeMemberRole={changeTeamMemberRole} onAssignTask={assignTeamTask} /> : null}
+        {activeView === 'team' ? teamWorkspaceView : null}
         {activeView === 'reports' ? <ReportsView leads={leads} metrics={metrics} progress={progress} rank={rank} profile={profile} companyProfile={companyProfile} operators={operators} activeOperatorId={activeOperatorId} performanceOperatorId={queueActorId} performanceHistory={performanceHistory} goals={missionGoals} onExport={exportCsv} onReset={resetDay} reportText={reportText} onGenerateReport={generateReport} /> : null}
       </main>
       <RightRail companyProfile={companyProfile} selectedCount={rosterProgressCount} goals={missionGoals} quoteCount={metrics.quotes} answeredCount={metrics.answered} callsMade={metrics.calls} profileCount={metrics.profiles} sampleCount={metrics.samples} pricingCount={metrics.pricing} xp={xp} nextXp={nextXp} rank={rank} achievements={progress.achievements || []} streak={progress.streak || 1} profile={profile} quoteLeads={quoteLeads} onOpenLead={(id) => openLead(id)} daily={daily} leads={leads} metrics={metrics} conversionCounts={{ retry: retryLeads.length, research: researchLeads.length, profiles: profileQueueLeads.length, followups: scheduledFollowUps.length }} onOpenConversion={() => setActiveView('conversion')} collapsed={effectiveRightCollapsed} onToggleCollapsed={() => focusMode ? setFocusMode(false) : setRightRailCollapsed((value) => !value)} companionMode={profile.companionMode} companionState={companionState} reducedMotion={appearance.reducedMotion} />
@@ -1236,7 +1265,7 @@ function App() {
       {sessionSummaryOpen ? <SessionSummaryModal metrics={metrics} callGoal={missionTarget} retryCount={retryLeads.length} invalidCount={researchLeads.length} warmCount={warmLeads.length} onClose={() => setSessionSummaryOpen(false)} onAction={handleSummaryAction} /> : null}
       {xpBurst ? <div className="xp-burst" key={xpBurst.id}><strong>{xpBurst.amount ? `+${xpBurst.amount} XP` : 'CLASS PREVIEW'}</strong><span>{xpBurst.reason}</span></div> : null}
       {practiceSession.active ? <div className="practice-banner"><Play size={14} /><span><strong>Practice Mode</strong> Safe sample leads · nothing here belongs to your real CRM.</span><button onClick={endPracticeMode}>Exit practice</button></div> : null}
-      {onboardingOpen ? <OnboardingModal profile={profile} territory={territory} teamConfig={teamConfig} deviceLock={deviceLock} firstRun={!onboardingComplete} onSaveSetup={saveOnboardingSetup} onTestGoogleKey={testOnboardingGoogleKey} onClose={closeOnboarding} onStartPractice={startPracticeMode} /> : null}
+      {onboardingOpen ? <OnboardingModal profile={profile} territory={territory} teamConfig={effectiveTeamConfig} managedTeamConnection={managedTeamConnection} deviceLock={deviceLock} firstRun={!onboardingComplete} onSaveSetup={saveOnboardingSetup} onTestGoogleKey={testOnboardingGoogleKey} onClose={closeOnboarding} onStartPractice={startPracticeMode} /> : null}
       {toast ? <div className="toast" role="status">{toast}</div> : null}
     </div>
   )

@@ -8,13 +8,13 @@ import {
   textToList,
 } from '../src/config/companyProfile.js'
 
-test('company profile defaults keep only verified HUAYU operating facts', () => {
+test('company profile defaults are generic and safe for a new user', () => {
   const profile = normalizeCompanyProfile()
-  assert.equal(profile.companyName, 'HUAYU KJ Supply & Leasing Corp.')
-  assert.equal(profile.fleetSize, 27)
-  assert.deepEqual(profile.quarryLocations, ['Rodriguez, Rizal', 'Tarlac'])
-  assert.equal(profile.quarryLocations.includes('Batangas'), false)
-  assert.match(companyDifferentiator(profile), /owned quarry operations/i)
+  assert.equal(profile.companyName, 'Your Company')
+  assert.equal(profile.fleetSize, 0)
+  assert.deepEqual(profile.quarryLocations, [])
+  assert.deepEqual(profile.credentials, [])
+  assert.doesNotMatch(companyDifferentiator(profile), /quarry|fleet/i)
 })
 
 test('company profile normalizes editable list and number fields', () => {
@@ -30,7 +30,7 @@ test('company profile normalizes editable list and number fields', () => {
   assert.equal(listToText(textToList('A, B\nC')), 'A, B, C')
 })
 
-test('company profile lets another business explicitly clear HUAYU-specific facts', () => {
+test('company profile lets a business explicitly clear company facts', () => {
   const profile = normalizeCompanyProfile({
     ...defaultCompanyProfile,
     companyName: 'Example Services',

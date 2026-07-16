@@ -229,3 +229,18 @@
 .manager-rollup-core small { font-size: 9.5px; }
 .manager-open-deals button strong { font-size: 10px; }
 .manager-open-deals button small, .manager-open-deals button > b, .manager-open-deals > p { font-size: 9px; }
+/* Hosted coworker access: authentication and workspace approval precede the cockpit. */
+.hosted-access-shell {
+  display: block;
+  min-height: 100dvh;
+  overflow: auto;
+  padding: clamp(18px, 3vw, 42px);
+}
+
+.hosted-access-main {
+  width: min(1320px, 100%);
+  min-height: calc(100dvh - clamp(36px, 6vw, 84px));
+  margin: 0 auto;
+  padding: 0;
+  overflow: visible;
+}

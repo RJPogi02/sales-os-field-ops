@@ -35,6 +35,7 @@ export function OnboardingModal({
   profile = {},
   territory = 'ALL',
   teamConfig = { url: '', anonKey: '' },
+  managedTeamConnection = false,
   deviceLock = { enabled: false },
   firstRun = false,
   onSaveSetup,
@@ -57,7 +58,7 @@ export function OnboardingModal({
     confirmPin: '',
     leadSearchProvider: profile.leadSearchProvider || 'nominatim',
     googlePlacesApiKey: profile.googlePlacesApiKey || '',
-    teamMode: teamConfig?.url ? 'team' : 'solo',
+    teamMode: managedTeamConnection || teamConfig?.url ? 'team' : 'solo',
     teamUrl: teamConfig?.url || '',
     teamAnonKey: teamConfig?.anonKey || '',
   }))
@@ -73,8 +74,8 @@ export function OnboardingModal({
     { label: 'Daily mission', value: `${cleanGoal(setup.dailyCallGoal)} calls · ${setup.territory}`, Icon: MapPinned },
     { label: 'Device privacy', value: setup.enableDeviceLock || deviceLock?.enabled ? 'PIN gate enabled' : 'No local PIN', Icon: ShieldCheck },
     { label: 'Lead discovery', value: setup.leadSearchProvider === 'google-places' ? 'Google Places' : 'OpenStreetMap', Icon: Radar },
-    { label: 'Collaboration', value: setup.teamMode === 'team' ? 'Team connection staged' : 'Solo workspace', Icon: Users },
-  ], [deviceLock?.enabled, setup])
+    { label: 'Collaboration', value: setup.teamMode === 'team' ? (managedTeamConnection ? 'Company cloud ready' : 'Team connection staged') : 'Solo workspace', Icon: Users },
+  ], [deviceLock?.enabled, managedTeamConnection, setup])
 
   const validateStep = () => {
     if (step === 1 && !setup.name.trim()) return 'Add your operator name before continuing.'
@@ -83,7 +84,7 @@ export function OnboardingModal({
       if (setup.pin !== setup.confirmPin) return 'The PIN confirmation does not match.'
     }
     if (step === 3 && setup.leadSearchProvider === 'google-places' && !setup.googlePlacesApiKey.trim()) return 'Paste a restricted Google Maps browser key or choose OpenStreetMap for now.'
-    if (step === 4 && setup.teamMode === 'team' && (!setup.teamUrl.trim() || !setup.teamAnonKey.trim())) return 'Add both company connection fields, or choose Solo for now.'
+    if (step === 4 && setup.teamMode === 'team' && !managedTeamConnection && (!setup.teamUrl.trim() || !setup.teamAnonKey.trim())) return 'Add both company connection fields, or choose Solo for now.'
     return ''
   }
 
@@ -126,7 +127,9 @@ export function OnboardingModal({
         territory: setup.territory,
         devicePin: setup.enableDeviceLock && !deviceLock?.enabled ? setup.pin : '',
         enableDeviceLock: setup.enableDeviceLock,
-        teamConfig: setup.teamMode === 'team' ? { url: setup.teamUrl.trim(), anonKey: setup.teamAnonKey.trim() } : teamConfig,
+        teamConfig: setup.teamMode === 'team'
+          ? (managedTeamConnection ? teamConfig : { url: setup.teamUrl.trim(), anonKey: setup.teamAnonKey.trim() })
+          : teamConfig,
         teamMode: setup.teamMode,
       })
       if (practice) onStartPractice?.()
@@ -190,9 +193,11 @@ export function OnboardingModal({
               <button type="button" className={`setup-provider-card ${setup.teamMode === 'solo' ? 'selected' : ''}`} onClick={() => update('teamMode', 'solo')}><UserRound size={21} /><strong>Solo for now</strong><small>Everything works locally. Team setup remains available in Team Hub.</small></button>
               <button type="button" className={`setup-provider-card ${setup.teamMode === 'team' ? 'selected' : ''}`} onClick={() => update('teamMode', 'team')}><Users size={21} /><strong>Connect my company</strong><small>Stage the shared connection now, then create or join the workspace with an account.</small></button>
             </div>
-            {setup.teamMode === 'team' ? <div className="setup-form setup-team-grid"><label><span>Company Supabase URL</span><input value={setup.teamUrl} onChange={(event) => update('teamUrl', event.target.value)} placeholder="https://your-project.supabase.co" /></label><label><span>Public anon key</span><input type="password" value={setup.teamAnonKey} onChange={(event) => update('teamAnonKey', event.target.value)} placeholder="Public anon key" autoComplete="off" /></label></div> : null}
+            {setup.teamMode === 'team' ? (managedTeamConnection
+              ? <div className="setup-status success"><Cloud size={18} /><span><strong>Company cloud ready</strong><small>The hosted app already knows where to connect. You and your coworkers only need private accounts and the same workspace invite code.</small></span></div>
+              : <div className="setup-form setup-team-grid"><label><span>Company Supabase URL</span><input value={setup.teamUrl} onChange={(event) => update('teamUrl', event.target.value)} placeholder="https://your-project.supabase.co" /></label><label><span>Public anon key</span><input type="password" value={setup.teamAnonKey} onChange={(event) => update('teamAnonKey', event.target.value)} placeholder="Public anon key" autoComplete="off" /></label></div>) : null}
             <div className="team-setup-roadmap"><span className={setup.teamMode === 'team' ? 'active' : ''}><i>1</i><strong>Company connection</strong><small>One admin configures the shared backend.</small></span><span><i>2</i><strong>Private account</strong><small>Each coworker signs in separately.</small></span><span><i>3</i><strong>Invite & sync</strong><small>Join the same workspace and claim leads.</small></span></div>
-            <p className="setup-fineprint"><Users size={14} />Solo mode is ready immediately. Live cross-laptop claims, assignments, and rankings only appear after a real company workspace connects successfully.</p>
+            <p className="setup-fineprint"><Users size={14} />{managedTeamConnection ? 'The shared connection is managed for this hosted app. Live claims, assignments, and rankings begin after coworkers sign in and join the same workspace.' : 'Solo mode is ready immediately. Live cross-laptop claims, assignments, and rankings only appear after a real company workspace connects successfully.'}</p>
           </div> : null}
 
           {step === 5 ? <div className="setup-ready">

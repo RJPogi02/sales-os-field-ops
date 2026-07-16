@@ -42,6 +42,7 @@ function ErrorNotice({ message }) {
 
 export function TeamWorkspace({
   config = {}, session = null, workspace = null, syncState = { status: 'local' },
+  managedTeamConnection = false,
   memberships = [], callEvents = [], claims = [], teamTasks = [], leaderboard = null, membership = null,
   activeOperator = null,
   onConfigChange, onSignIn, onSignUp, onSignOut,
@@ -69,7 +70,7 @@ export function TeamWorkspace({
 
   const validation = useMemo(() => validateTeamConfig(draftConfig), [draftConfig])
   const savedValidation = useMemo(() => validateTeamConfig(config), [config])
-  const configured = savedValidation.valid
+  const configured = managedTeamConnection || savedValidation.valid
   const signedIn = Boolean(session?.access_token && session?.user?.id)
   const currentMembership = useMemo(() => membership
     ? { ...membership, role: normalizeTeamRole(membership.role), status: normalizeMembershipStatus(membership.status || membership.membership_status) }
@@ -108,6 +109,7 @@ export function TeamWorkspace({
   }
 
   const saveConfiguration = () => {
+    if (managedTeamConnection) return
     if (!validation.valid) { setError(validation.errors.join(' ')); return }
     run('config', async () => {
       await createTeamSyncClient({ url: validation.url, anonKey: validation.anonKey }).testConnection()
@@ -156,20 +158,22 @@ export function TeamWorkspace({
 
       <div style={{ ...card, display: 'flex', gap: 12, alignItems: 'flex-start', border: '1px solid rgba(96,165,250,.45)' }}>
         <ShieldCheck size={21} color="#60a5fa" />
-        <div><strong>Local-first, cloud when you choose</strong><p style={{ margin: '5px 0 0', opacity: .78 }}>Cross-laptop sharing starts only after a successful sign-in, team selection, and sync. Until then this device stays local-only; the screen never pretends a cloud connection exists.</p></div>
+        {managedTeamConnection
+          ? <div><strong>Company cloud ready</strong><p style={{ margin: '5px 0 0', opacity: .78 }}>The hosted app already has the shared company connection. Sign in with your own account, create or join a workspace, then sync with your coworkers—no project URL or API key setup is needed.</p></div>
+          : <div><strong>Local-first, cloud when you choose</strong><p style={{ margin: '5px 0 0', opacity: .78 }}>Cross-laptop sharing starts only after a successful sign-in, team selection, and sync. Until then this device stays local-only; the screen never pretends a cloud connection exists.</p></div>}
       </div>
 
       <ErrorNotice message={error || syncState?.error} />
 
       <div style={cardGrid}>
         <article style={card}>
-          <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 12 }}><KeyRound size={18} /><div><strong>1 · Supabase connection</strong><small style={{ display: 'block', opacity: .68 }}>Project settings stay on this device.</small></div></div>
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 12 }}><KeyRound size={18} /><div><strong>1 · {managedTeamConnection ? 'Company cloud' : 'Supabase connection'}</strong><small style={{ display: 'block', opacity: .68 }}>{managedTeamConnection ? 'Managed securely for this hosted workspace.' : 'Project settings stay on this device.'}</small></div></div>
+          {managedTeamConnection ? <div style={{ ...card, padding: 14, display: 'flex', gap: 10, alignItems: 'flex-start', border: '1px solid rgba(52,211,153,.45)' }}><Cloud size={19} color="#34d399" /><span><strong style={{ display: 'block' }}>Company cloud ready</strong><small style={{ display: 'block', marginTop: 5, opacity: .72 }}>Your browser uses the managed public connection automatically. Continue with your private account; administrators keep backend credentials and access rules out of this screen.</small></span></div> : <div style={{ display: 'grid', gap: 10 }}>
             <label style={field}><span>Project URL</span><input style={input} inputMode="url" autoComplete="url" value={draftConfig.url} onChange={(event) => setDraftConfig((current) => ({ ...current, url: event.target.value }))} placeholder="https://your-project.supabase.co" /></label>
             <label style={field}><span>Anon / publishable key</span><input style={input} type="password" autoComplete="off" value={draftConfig.anonKey} onChange={(event) => setDraftConfig((current) => ({ ...current, anonKey: event.target.value }))} placeholder="Use the browser-safe anon key" /></label>
             <button type="button" style={primary} disabled={busy === 'config'} onClick={saveConfiguration}>{busy === 'config' ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}{busy === 'config' ? 'Testing connection' : 'Test & save connection'}</button>
             <small style={{ opacity: .68 }}>Never enter a service-role key here. Apply the included RLS schema before inviting coworkers.</small>
-          </div>
+          </div>}
         </article>
 
         <article style={{ ...card, opacity: configured ? 1 : .58 }}>

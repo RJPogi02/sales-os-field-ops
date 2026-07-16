@@ -13,8 +13,8 @@ v0.09 preserves the working v0.082 call, CRM, Lead Finder, task, report, map, lo
 - **Local mode works without an account.** CRM, operator, daily mission, task, settings, and theme state remain in this browser through `localStorage` until exported or reset.
 - **The optional startup PIN is a local device privacy gate, not an online login.** Its salted verifier is stored in the browser and it blocks casual access when a new tab/session starts, but it does not encrypt `localStorage`. Team Hub email/password authentication is separate.
 - **Google Places is optional and not preconfigured.** It needs internet access, a Google Maps browser key, the required Google APIs, and billing on the user's Google Cloud project. Usage can incur charges.
-- **Team Hub is optional and not preconfigured.** Cross-laptop sync starts only after a Supabase project is configured, the included schema is applied, an operator signs in, joins a company workspace, and completes a successful sync.
-- **No Google or Supabase credentials are included in the repository or release package.**
+- **Team Hub is optional in local packages.** The hosted company build can provide its browser-safe Supabase connection at runtime; coworkers still need separate accounts, an invite code, and owner/manager approval.
+- **No Google key, Supabase secret key, or service-role credential is included in the repository or release package.** A hosted publishable key is intentionally delivered to the browser and remains constrained by Row Level Security.
 - The Supabase client, merge rules, row-level-security schema, and helper tests are included. The browser-safe connection handshake was verified against a live Supabase project on July 15, 2026; account confirmation and two-laptop collaboration still need the planned operator test before company rollout.
 - Sales OS does not automatically call, email, scrape websites, generate final prices, or submit quotations. Final availability and pricing require the human pricing approver configured in Company Profile.
 
@@ -61,7 +61,7 @@ npm run preview
 
 - Added one normalized Company Profile for company name, short call name, business vertical, operator identity, final pricing approver, fleet, assets, quarry/source locations, materials, and verified credentials.
 - Added a Company Profile editor in Settings so scripts, reports, pricing queues, send packs, and dashboard labels use the configured facts instead of scattered hardcoded names.
-- Default HUAYU data is limited to verified context: 27 dump trucks plus tractor heads, with quarry operations in Rodriguez, Rizal and Tarlac.
+- New installations use a generic, empty company profile. Existing operators keep their browser-local company configuration.
 - Existing local data and legacy pricing fields migrate forward without discarding the operator's CRM history.
 
 ### Animated Ops Command Center

@@ -9,10 +9,11 @@ import {
 } from '../src/lib/conversationFlow.js'
 
 test('new batching lead gets a concise verified procurement opening', () => {
-  const flow = buildConversationFlow({ company: 'Sample Ready Mix', status: 'New Lead' }, defaultCompanyProfile, { name: 'RJ' })
+  const company = { ...defaultCompanyProfile, shortName: 'Sample Supply', quarryLocations: ['North Hub'] }
+  const flow = buildConversationFlow({ company: 'Sample Ready Mix', status: 'New Lead' }, company, { name: 'Alex' })
   assert.equal(flow.context.vertical, 'ready-mix')
-  assert.match(flow.nodes.opening.say, /RJ from HUAYU KJ/i)
-  assert.match(flow.nodes.opening.say, /owned quarry operations in Rodriguez, Rizal and Tarlac/i)
+  assert.match(flow.nodes.opening.say, /Alex from Sample Supply/i)
+  assert.match(flow.nodes.opening.say, /owned quarry operations in North Hub/i)
   assert.equal(flow.nodes.opening.say.includes('100'), false)
   assert.ok(flow.openingSeconds < 15, `expected a sub-15-second opening, got ${flow.openingSeconds}s`)
   assert.match(flow.nodes.opening.why, /Company Profile/i)

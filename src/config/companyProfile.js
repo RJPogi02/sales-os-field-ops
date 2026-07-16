@@ -7,18 +7,18 @@ export const COMPANY_VERTICALS = [
 ]
 
 export const defaultCompanyProfile = Object.freeze({
-  companyName: 'HUAYU KJ Supply & Leasing Corp.',
-  shortName: 'HUAYU KJ',
-  operatorName: 'RJ',
-  operatorRole: 'Field Representative',
-  approverLabel: 'Sir Luke',
-  businessVertical: 'aggregates-supplier',
-  ownedAssets: ['Quarry operations', 'Delivery fleet'],
-  quarryLocations: ['Rodriguez, Rizal', 'Tarlac'],
-  fleetSize: 27,
-  fleetTypes: ['Dump trucks', 'Tractor heads'],
-  credentials: ['LLRN', 'Meralco Terra Solar'],
-  materials: ['Vibro Sand', 'Double-screened Sand', 'G1', '3/4', '3/8', 'S1'],
+  companyName: 'Your Company',
+  shortName: 'Company',
+  operatorName: 'Operator',
+  operatorRole: 'Team Member',
+  approverLabel: 'Management',
+  businessVertical: 'construction-services',
+  ownedAssets: [],
+  quarryLocations: [],
+  fleetSize: 0,
+  fleetTypes: [],
+  credentials: [],
+  materials: [],
 })
 
 const cleanText = (value, fallback = '') => String(value ?? fallback).trim()

@@ -24,6 +24,9 @@ test('team configuration requires a browser-safe URL and anon key', () => {
   assert.equal(local.valid, true)
   assert.equal(local.url, 'http://127.0.0.1:54321')
   assert.equal(validateTeamConfig({ url: 'https://demo.supabase.co', anonKey: 'anon' }).valid, true)
+  assert.equal(validateTeamConfig({ url: 'https://demo.supabase.co', anonKey: 'sb_secret_private-value' }).valid, false)
+  const serviceRoleKey = `header.${Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64url')}.signature`
+  assert.equal(validateTeamConfig({ url: 'https://demo.supabase.co', anonKey: serviceRoleKey }).valid, false)
 })
 
 test('auth session keeps tokens but strips password-shaped metadata', () => {

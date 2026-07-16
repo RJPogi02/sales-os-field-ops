@@ -1,3 +1,5 @@
+import { isUnsafeSupabaseKey } from './teamBootstrap.js'
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 const DEFAULT_TIMEOUT_MS = 20_000
 const SESSION_REFRESH_SKEW_SECONDS = 90
@@ -102,6 +104,7 @@ export function validateTeamConfig(config = {}) {
     }
   }
   if (!anonKey) errors.push('Supabase anon key is required.')
+  else if (isUnsafeSupabaseKey(anonKey)) errors.push('Use a publishable or anon key, never a secret or service-role key.')
   return { valid: errors.length === 0, errors, url, anonKey }
 }
 

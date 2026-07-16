@@ -17,3 +17,6 @@ __pycache__/
 Thumbs.db
 .vite/
 .wrangler/
+
+# Private local CRM backup. Never bundle or commit customer records.
+src/data/leads.json
