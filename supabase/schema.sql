@@ -162,7 +162,7 @@ as $$
 begin
   insert into public.profiles (id, display_name)
   values (new.id, coalesce(nullif(new.raw_user_meta_data ->> 'display_name', ''), split_part(coalesce(new.email, 'Sales operator'), '@', 1)))
-  on conflict (id) do nothing;
+  on conflict on constraint profiles_pkey do nothing;
   return new;
 end;
 $$;
@@ -226,7 +226,7 @@ begin
 
   insert into public.profiles (id, display_name)
   values (auth.uid(), coalesce(nullif(auth.jwt() -> 'user_metadata' ->> 'display_name', ''), split_part(coalesce(auth.jwt() ->> 'email', 'Sales operator'), '@', 1)))
-  on conflict (id) do nothing;
+  on conflict on constraint profiles_pkey do nothing;
 
   insert into public.organizations (name, created_by) values (v_name, auth.uid()) returning * into v_org;
   insert into public.memberships (organization_id, user_id, role, status, joined_at, approved_at, approved_by)
@@ -250,7 +250,7 @@ begin
 
   insert into public.profiles (id, display_name)
   values (auth.uid(), coalesce(nullif(auth.jwt() -> 'user_metadata' ->> 'display_name', ''), split_part(coalesce(auth.jwt() ->> 'email', 'Sales operator'), '@', 1)))
-  on conflict (id) do nothing;
+  on conflict on constraint profiles_pkey do nothing;
   insert into public.memberships (organization_id, user_id, role, status, joined_at, approved_at, approved_by)
   values (
     v_org.id,

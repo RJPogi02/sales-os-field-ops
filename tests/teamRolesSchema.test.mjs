@@ -21,3 +21,21 @@ test('fresh schema approval gates membership and manager task assignment', async
   assert.match(schema, /v_actor_role <> 'owner'.*Owner access required to change team roles/is)
   assert.match(schema, /memberships_select_team[\s\S]*or user_id = auth\.uid\(\)/i)
 })
+
+test('workspace RPCs avoid ambiguous profile id conflict targets', async () => {
+  const sources = await Promise.all([
+    read('../supabase/schema.sql'),
+    read('../supabase/migrations/20260716_fix_workspace_ambiguous_id.sql'),
+  ])
+
+  for (const sql of sources) {
+    assert.doesNotMatch(sql, /on conflict\s*\(id\)\s*do nothing/i)
+  }
+
+  const hotfix = sources[1]
+  for (const rpc of ['create_organization', 'join_organization_by_code']) {
+    const body = hotfix.match(new RegExp(`create or replace function public\\.${rpc}[\\s\\S]*?\\$\\$;`, 'i'))?.[0]
+    assert.ok(body, `${rpc} must be included in the hotfix`)
+    assert.match(body, /on conflict on constraint profiles_pkey do nothing/i)
+  }
+})
