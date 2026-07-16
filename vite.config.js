@@ -1,20 +1,34 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
-  // GitHub Pages serves this repository from a sub-path. Local development,
-  // desktop packages, and direct hosting continue to use the site root.
-  base: process.env.GITHUB_ACTIONS ? '/sales-os-field-ops/' : '/',
-  plugins: [react()],
-  build: {
-    rolldownOptions: {
-      output: {
-        codeSplitting: {
-          groups: [
-            { name: 'maps', test: /node_modules[\\/](leaflet|react-leaflet|@react-leaflet)/ },
-          ],
+export default defineConfig(async () => {
+  // Keep Cloudflare's local build state inside the project. GitHub Pages keeps
+  // its existing static build, while OpenAI Sites receives Worker output.
+  process.env.WRANGLER_WRITE_LOGS ??= 'false'
+  process.env.WRANGLER_LOG_PATH ??= '.wrangler/logs'
+  process.env.MINIFLARE_REGISTRY_PATH ??= '.wrangler/registry'
+
+  const plugins = [react()]
+  if (!process.env.GITHUB_ACTIONS) {
+    const { cloudflare } = await import('@cloudflare/vite-plugin')
+    plugins.push(cloudflare())
+  }
+
+  return {
+    // GitHub Pages serves this repository from a sub-path. Local development,
+    // desktop packages, and direct hosting continue to use the site root.
+    base: process.env.GITHUB_ACTIONS ? '/sales-os-field-ops/' : '/',
+    plugins,
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              { name: 'maps', test: /node_modules[\\/](leaflet|react-leaflet|@react-leaflet)/ },
+            ],
+          },
         },
       },
     },
-  },
+  }
 })
