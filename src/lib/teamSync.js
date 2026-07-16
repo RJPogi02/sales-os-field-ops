@@ -515,7 +515,7 @@ export function createTeamSyncClient(rawConfig = {}, session = null, {
       const org = encodeFilter(organizationId)
       const [organizations, memberships, leads, claims, callEvents, tasks] = await Promise.all([
         rest('organizations', { query: `?id=eq.${org}&select=id,name,invite_code,open_join,created_at,created_by` }),
-        rest('memberships', { query: `?organization_id=eq.${org}&select=organization_id,user_id,role,status,requested_at,joined_at,approved_at,approved_by,profile:profiles(id,display_name,avatar_url)` }),
+        rest('memberships', { query: `?organization_id=eq.${org}&select=organization_id,user_id,role,status,requested_at,joined_at,approved_at,approved_by,profile:profiles!memberships_user_id_fkey(id,display_name,avatar_url)` }),
         rest('team_leads', { query: `?organization_id=eq.${org}&select=organization_id,lead_id,visibility,owner_user_id,payload,updated_at,created_by&order=updated_at.desc` }),
         rest('lead_claims', { query: `?organization_id=eq.${org}&expires_at=gt.${encodeFilter(new Date().toISOString())}&select=organization_id,lead_id,claimed_by,claimed_at,expires_at,profile:profiles!lead_claims_claimed_by_fkey(display_name)` }),
         rest('call_events', { query: `?organization_id=eq.${org}&select=id,organization_id,lead_id,user_id,result,occurred_at,payload&order=occurred_at.desc&limit=${Math.max(1, Math.min(2000, Number(eventLimit) || 500))}` }),

@@ -231,6 +231,23 @@ test('pending users can refresh only their own membership before full sync', asy
   assert.doesNotMatch(requests[0].url, /team_leads|call_events|team_tasks/)
 })
 
+test('team snapshot disambiguates the member profile relationship', async () => {
+  const requests = []
+  const fetchImpl = async (url, init) => {
+    requests.push({ url, init })
+    return response(200, [])
+  }
+  const client = createTeamSyncClient({ url: 'https://demo.supabase.co', anonKey: 'anon' }, {
+    access_token: 'token', refresh_token: 'refresh', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: USER_ID },
+  }, { fetchImpl })
+
+  await client.getSnapshot(ORGANIZATION_ID)
+
+  const membershipRequest = requests.find(({ url }) => url.includes('/rest/v1/memberships?'))
+  assert.ok(membershipRequest)
+  assert.match(membershipRequest.url, /profile:profiles!memberships_user_id_fkey\(id,display_name,avatar_url\)/)
+})
+
 test('session refresh happens before expiry and publishes the replacement session', async () => {
   const requests = []
   let published = null
